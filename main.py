@@ -619,7 +619,6 @@ def get_products_sold(month: str, _user: models.User = Depends(get_current_user)
             b = bosta_by_sku.get(p.sku, {"qty": 0, "revenue": 0.0})
             man = manual_rows.get(p.sku)
             price      = man.price      if man else None
-            new_price  = man.new_price  if man else None
             cost       = man.cost       if man else None
             extra_cost = man.extra_cost if man else None
             expense    = man.expense    if man else None
@@ -628,7 +627,6 @@ def get_products_sold(month: str, _user: models.User = Depends(get_current_user)
                 "sku":        p.sku,
                 "name":       p.name,
                 "price":      price,
-                "new_price":  new_price,
                 "cost":       cost,
                 "extra_cost": extra_cost,
                 "qty":        b["qty"],
@@ -642,7 +640,6 @@ def get_products_sold(month: str, _user: models.User = Depends(get_current_user)
 
 class ProductsSoldUpdate(BaseModel):
     price:      float | None = None
-    new_price:  float | None = None
     cost:       float | None = None
     extra_cost: float | None = None
     expense:    float | None = None
@@ -667,7 +664,6 @@ def update_products_sold(month: str, sku: str, payload: ProductsSoldUpdate,
             db.add(row)
 
         row.price      = payload.price
-        row.new_price  = payload.new_price
         row.cost       = payload.cost
         row.extra_cost = payload.extra_cost
         row.expense    = payload.expense

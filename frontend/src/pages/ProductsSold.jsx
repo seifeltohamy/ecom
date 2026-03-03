@@ -16,7 +16,7 @@ function calcProfit(row) {
   return { profit: Math.round(profit * 100) / 100, profit_pct: Math.round(pct * 100) / 100 };
 }
 
-const MANUAL_FIELDS = ['price', 'new_price', 'cost', 'extra_cost', 'expense'];
+const MANUAL_FIELDS = ['price', 'cost', 'extra_cost', 'expense'];
 
 function EditCell({ value, field, sku, month, onSaved }) {
   const [editing, setEditing] = useState(false);
@@ -194,7 +194,6 @@ export default function ProductsSold() {
                 <tr>
                   <th style={thLeft}>Product</th>
                   <th style={thStyle}>Price</th>
-                  <th style={thStyle}>NEW Price</th>
                   <th style={thStyle}>Cost</th>
                   <th style={thStyle}>Extra Cost</th>
                   <th style={{ ...thStyle, color: 'var(--accent)' }}>Qty</th>
@@ -216,7 +215,7 @@ export default function ProductsSold() {
                         <div style={{ fontWeight: 600, color: '#fafafa' }}>{row.name}</div>
                         <div style={{ fontSize: '.75rem', color: 'var(--muted)', fontFamily: 'monospace' }}>{row.sku}</div>
                       </td>
-                      {['price', 'new_price', 'cost', 'extra_cost'].map(f => (
+                      {['price', 'cost', 'extra_cost'].map(f => (
                         <td key={f} style={{ ...tdStyle, color: 'var(--text)' }}>
                           <EditCell value={row[f]} field={f} sku={row.sku} month={activeMonth} onSaved={handleSaved} />
                         </td>
