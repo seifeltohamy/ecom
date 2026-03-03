@@ -671,6 +671,102 @@ def update_products_sold(month: str, sku: str, payload: ProductsSoldUpdate,
     return {"ok": True}
 
 
+# ── Feature 7: App Settings ───────────────────────────────────────────────────
+
+class SettingsUpdate(BaseModel):
+    bosta_api_key: str | None = None
+
+
+@app.get("/settings")
+def get_settings(_admin: models.User = Depends(require_admin)):
+    with get_db() as db:
+        rows = db.query(models.AppSettings).all()
+        data = {r.key: r.value for r in rows}
+    return {"bosta_api_key": data.get("bosta_api_key", "")}
+
+
+@app.put("/settings")
+def update_settings(payload: SettingsUpdate, _admin: models.User = Depends(require_admin)):
+    updates = {"bosta_api_key": payload.bosta_api_key or ""}
+    with get_db() as db:
+        for k, v in updates.items():
+            row = db.query(models.AppSettings).filter(models.AppSettings.key == k).first()
+            if row:
+                row.value = v
+            else:
+                db.add(models.AppSettings(key=k, value=v))
+        db.commit()
+    return {"ok": True}
+
+
+# ── Feature 8: Stock Value ────────────────────────────────────────────────────
+
+@app.get("/stock-value")
+def get_stock_value(_user: models.User = Depends(get_current_user)):
+    import httpx
+
+    with get_db() as db:
+        setting = db.query(models.AppSettings).filter(models.AppSettings.key == "bosta_api_key").first()
+        api_key = setting.value if setting else ""
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Bosta API key not configured. Go to Settings to add it.")
+
+    try:
+        resp = httpx.get(
+            "https://app.bosta.co/api/v2/products/list",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"isActiveProducts": True, "isActiveProductVariants": True},
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Bosta API error: {e.response.status_code}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not reach Bosta API: {str(e)}")
+
+    products = resp.json().get("data", {}).get("products", [])
+    rows = []
+
+    for p in products:
+        p_name    = p.get("name") or p.get("nameAr") or "Unknown"
+        p_price   = p.get("defaultPrice") or 0
+        variants  = p.get("productsVariances") or []
+
+        if variants:
+            for v in variants:
+                sku = v.get("referenceId") or p.get("referenceId")
+                if not sku:
+                    continue
+                qty   = v.get("variantQuantity") or 0
+                price = v.get("variantPrice") or p_price
+                opt   = (v.get("optionsString") or "").strip()
+                name  = f"{p_name} – {opt}" if opt else p_name
+                rows.append({
+                    "sku":         sku,
+                    "name":        name,
+                    "qty":         qty,
+                    "price":       price,
+                    "stock_value": round(qty * price, 2),
+                })
+        else:
+            sku = p.get("referenceId")
+            if not sku:
+                continue
+            qty = p.get("quantity") or 0
+            rows.append({
+                "sku":         sku,
+                "name":        p_name,
+                "qty":         qty,
+                "price":       p_price,
+                "stock_value": round(qty * p_price, 2),
+            })
+
+    total_qty   = sum(r["qty"] for r in rows)
+    total_value = round(sum(r["stock_value"] for r in rows), 2)
+    return {"rows": rows, "total_qty": total_qty, "total_value": total_value}
+
+
 # ── SPA / static file serving ────────────────────────────────────────────────
 
 from fastapi.staticfiles import StaticFiles

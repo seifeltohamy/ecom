@@ -90,3 +90,9 @@ class ProductsSoldManual(Base):
     expense    = Column(Float, nullable=True)
 
     __table_args__ = (UniqueConstraint("month_id", "sku", name="uq_ps_month_sku"),)
+
+
+class AppSettings(Base):
+    __tablename__ = "app_settings"
+    key   = Column(String(64), primary_key=True)
+    value = Column(Text, nullable=True)

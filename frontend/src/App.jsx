@@ -10,6 +10,8 @@ import Cashflow    from './pages/Cashflow.jsx';
 import BostaOrders from './pages/BostaOrders.jsx';
 import Products     from './pages/Products.jsx';
 import ProductsSold from './pages/ProductsSold.jsx';
+import StockValue   from './pages/StockValue.jsx';
+import Settings     from './pages/Settings.jsx';
 import Users        from './pages/Users.jsx';
 
 const pageMeta = {
@@ -19,6 +21,8 @@ const pageMeta = {
   '/bosta':      { title: 'Bosta Orders',    subtitle: 'Upload a Bosta inventory export to generate a sales report by SKU.' },
   '/products':       { title: 'Products',        subtitle: 'Maintain your SKU name list for reports.' },
   '/products-sold':  { title: 'Products Sold',   subtitle: 'Monthly performance by product with profit tracking.' },
+  '/stock-value':    { title: 'Stock Value',     subtitle: 'Live inventory from Bosta — current stock value by product.' },
+  '/settings':       { title: 'Settings',        subtitle: 'Configure integrations and API keys.' },
   '/users':          { title: 'User Management', subtitle: 'Create and manage user accounts.' },
 };
 
@@ -91,13 +95,19 @@ function Layout() {
           <NavLink to="/cashflow"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Cashflow</NavLink>
           <NavLink to="/bosta"          style={({ isActive }) => S.navItem(isActive)} onClick={close}>Bosta Orders</NavLink>
           <NavLink to="/products-sold"  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products Sold</NavLink>
+          <NavLink to="/stock-value"    style={({ isActive }) => S.navItem(isActive)} onClick={close}>Stock Value</NavLink>
           <NavLink to="/products"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>
           {userRole === 'admin' && (
             <NavLink to="/users"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
           )}
         </nav>
 
-        <div style={{ marginTop: 'auto' }}>{signOutBtn}</div>
+        <div style={{ marginTop: 'auto', display: 'grid', gap: '.4rem' }}>
+          {userRole === 'admin' && (
+            <NavLink to="/settings" style={({ isActive }) => S.navItem(isActive)} onClick={close}>⚙ Settings</NavLink>
+          )}
+          {signOutBtn}
+        </div>
       </aside>
 
       {/* Main content */}
@@ -133,7 +143,9 @@ export default function App() {
               <Route path="bosta"      element={<BostaOrders />} />
               <Route path="products-sold" element={<ProductsSold />} />
               <Route path="products"     element={<Products />} />
-              <Route path="users"      element={<Users />} />
+              <Route path="stock-value"  element={<StockValue />} />
+              <Route path="settings"     element={<Settings />} />
+              <Route path="users"        element={<Users />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
