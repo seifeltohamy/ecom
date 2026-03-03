@@ -718,11 +718,16 @@ def get_stock_value(_user: models.User = Depends(get_current_user)):
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=15,
         )
-        resp.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=502, detail=f"Bosta API error: {e.response.status_code}")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach Bosta API: {str(e)}")
+
+    if resp.status_code != 200:
+        try:
+            body = resp.json()
+            msg = body.get("message") or body.get("error") or resp.text[:300]
+        except Exception:
+            msg = resp.text[:300]
+        raise HTTPException(status_code=502, detail=f"Bosta API returned {resp.status_code}: {msg}")
 
     products = resp.json().get("data", {}).get("products", [])
     rows = []
