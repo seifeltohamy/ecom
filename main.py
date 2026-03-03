@@ -714,9 +714,10 @@ def get_stock_value(_user: models.User = Depends(get_current_user)):
 
     try:
         resp = httpx.get(
-            "https://app.bosta.co/api/v2/products/list",
+            "http://app.bosta.co/api/v2/products/list",
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=15,
+            follow_redirects=True,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach Bosta API: {str(e)}")
