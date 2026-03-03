@@ -76,3 +76,17 @@ class BostaReport(Base):
     grand_quantity = Column(Integer,  nullable=False, default=0)
     grand_revenue  = Column(Float,    nullable=False, default=0.0)
     rows_json      = Column(Text,     nullable=False, default="[]")
+
+
+class ProductsSoldManual(Base):
+    __tablename__ = "products_sold_manual"
+    id         = Column(Integer, primary_key=True, index=True)
+    month_id   = Column(Integer, ForeignKey("cashflow_months.id", ondelete="CASCADE"), nullable=False)
+    sku        = Column(String(64), nullable=False)
+    price      = Column(Float, nullable=True)
+    new_price  = Column(Float, nullable=True)
+    cost       = Column(Float, nullable=True)
+    extra_cost = Column(Float, nullable=True)
+    expense    = Column(Float, nullable=True)
+
+    __table_args__ = (UniqueConstraint("month_id", "sku", name="uq_ps_month_sku"),)

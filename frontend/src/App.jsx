@@ -8,16 +8,18 @@ import Home        from './pages/Home.jsx';
 import Analytics   from './pages/Analytics.jsx';
 import Cashflow    from './pages/Cashflow.jsx';
 import BostaOrders from './pages/BostaOrders.jsx';
-import Products    from './pages/Products.jsx';
-import Users       from './pages/Users.jsx';
+import Products     from './pages/Products.jsx';
+import ProductsSold from './pages/ProductsSold.jsx';
+import Users        from './pages/Users.jsx';
 
 const pageMeta = {
   '/':           { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
   '/analytics':  { title: 'Analytics',       subtitle: 'Money in/out totals and spend distribution.' },
   '/cashflow':   { title: 'Cashflow',        subtitle: 'Track your daily money in and money out.' },
   '/bosta':      { title: 'Bosta Orders',    subtitle: 'Upload a Bosta inventory export to generate a sales report by SKU.' },
-  '/products':   { title: 'Products',        subtitle: 'Maintain your SKU name list for reports.' },
-  '/users':      { title: 'User Management', subtitle: 'Create and manage user accounts.' },
+  '/products':       { title: 'Products',        subtitle: 'Maintain your SKU name list for reports.' },
+  '/products-sold':  { title: 'Products Sold',   subtitle: 'Monthly performance by product with profit tracking.' },
+  '/users':          { title: 'User Management', subtitle: 'Create and manage user accounts.' },
 };
 
 function Layout() {
@@ -88,6 +90,7 @@ function Layout() {
           <NavLink to="/analytics"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Analytics</NavLink>
           <NavLink to="/cashflow"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Cashflow</NavLink>
           <NavLink to="/bosta"          style={({ isActive }) => S.navItem(isActive)} onClick={close}>Bosta Orders</NavLink>
+          <NavLink to="/products-sold"  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products Sold</NavLink>
           <NavLink to="/products"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>
           {userRole === 'admin' && (
             <NavLink to="/users"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
@@ -128,7 +131,8 @@ export default function App() {
               <Route path="analytics"  element={<Analytics />} />
               <Route path="cashflow"   element={<Cashflow />} />
               <Route path="bosta"      element={<BostaOrders />} />
-              <Route path="products"   element={<Products />} />
+              <Route path="products-sold" element={<ProductsSold />} />
+              <Route path="products"     element={<Products />} />
               <Route path="users"      element={<Users />} />
             </Route>
           </Route>

@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 import openpyxl
@@ -564,6 +565,112 @@ def delete_user(user_id: int, admin: models.User = Depends(require_admin)):
         if user.id == admin.id:
             raise HTTPException(status_code=400, detail="Cannot delete your own account.")
         db.delete(user)
+        db.commit()
+    return {"ok": True}
+
+
+# ── Feature 6: Products Sold ──────────────────────────────────────────────────
+
+def _calc_profit(revenue, cost, qty, extra_cost, expense):
+    profit = revenue - (cost or 0) * qty - (extra_cost or 0) - (expense or 0)
+    profit_pct = round(profit / revenue * 100, 2) if revenue else 0.0
+    return round(profit, 2), profit_pct
+
+
+@app.get("/products-sold/{month}")
+def get_products_sold(month: str, _user: models.User = Depends(get_current_user)):
+    from datetime import datetime as _dt
+    try:
+        dt = _dt.strptime(month, "%b %Y")
+        prefix = dt.strftime("%Y-%m")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid month format. Use 'Mar 2026'.")
+
+    with get_db() as db:
+        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        if not m:
+            raise HTTPException(status_code=404, detail="Month not found.")
+
+        # Latest Bosta report whose date_from falls in this month
+        report = (
+            db.query(models.BostaReport)
+            .filter(models.BostaReport.date_from.like(f"{prefix}%"))
+            .order_by(models.BostaReport.uploaded_at.desc())
+            .first()
+        )
+        bosta_by_sku = {}
+        if report:
+            for row in json.loads(report.rows_json):
+                bosta_by_sku[row["sku"]] = {
+                    "qty": row.get("total_quantity", 0),
+                    "revenue": row.get("total_revenue", 0.0),
+                }
+
+        products = db.query(models.Product).all()
+        manual_rows = {
+            r.sku: r
+            for r in db.query(models.ProductsSoldManual)
+            .filter(models.ProductsSoldManual.month_id == m.id)
+            .all()
+        }
+
+        result = []
+        for p in products:
+            b = bosta_by_sku.get(p.sku, {"qty": 0, "revenue": 0.0})
+            man = manual_rows.get(p.sku)
+            price      = man.price      if man else None
+            new_price  = man.new_price  if man else None
+            cost       = man.cost       if man else None
+            extra_cost = man.extra_cost if man else None
+            expense    = man.expense    if man else None
+            profit, profit_pct = _calc_profit(b["revenue"], cost, b["qty"], extra_cost, expense)
+            result.append({
+                "sku":        p.sku,
+                "name":       p.name,
+                "price":      price,
+                "new_price":  new_price,
+                "cost":       cost,
+                "extra_cost": extra_cost,
+                "qty":        b["qty"],
+                "revenue":    b["revenue"],
+                "expense":    expense,
+                "profit":     profit,
+                "profit_pct": profit_pct,
+            })
+        return result
+
+
+class ProductsSoldUpdate(BaseModel):
+    price:      float | None = None
+    new_price:  float | None = None
+    cost:       float | None = None
+    extra_cost: float | None = None
+    expense:    float | None = None
+
+
+@app.put("/products-sold/{month}/{sku}")
+def update_products_sold(month: str, sku: str, payload: ProductsSoldUpdate,
+                         _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        if not m:
+            raise HTTPException(status_code=404, detail="Month not found.")
+
+        row = (
+            db.query(models.ProductsSoldManual)
+            .filter(models.ProductsSoldManual.month_id == m.id,
+                    models.ProductsSoldManual.sku == sku)
+            .first()
+        )
+        if row is None:
+            row = models.ProductsSoldManual(month_id=m.id, sku=sku)
+            db.add(row)
+
+        row.price      = payload.price
+        row.new_price  = payload.new_price
+        row.cost       = payload.cost
+        row.extra_cost = payload.extra_cost
+        row.expense    = payload.expense
         db.commit()
     return {"ok": True}
 
