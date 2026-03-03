@@ -1,0 +1,22 @@
+# CRITICAL — never commit credentials
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc
+app/__pycache__/
+alembic/__pycache__/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Local data files (data lives in Supabase)
+cashflow/
+products.json
+
+# OS/IDE
+.vscode/
+.DS_Store
+Thumbs.db
