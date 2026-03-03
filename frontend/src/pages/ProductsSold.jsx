@@ -128,12 +128,14 @@ export default function ProductsSold() {
   const totals = rows.reduce(
     (acc, r) => {
       const { profit } = calcProfit(r);
-      acc.qty     += r.qty || 0;
-      acc.revenue += r.revenue || 0;
-      acc.profit  += profit;
+      const rowExpense = (r.cost || 0) * (r.qty || 0) + (r.extra_cost || 0) + (r.expense || 0);
+      acc.qty      += r.qty || 0;
+      acc.revenue  += r.revenue || 0;
+      acc.expenses += rowExpense;
+      acc.profit   += profit;
       return acc;
     },
-    { qty: 0, revenue: 0, profit: 0 }
+    { qty: 0, revenue: 0, expenses: 0, profit: 0 }
   );
   const totalProfitPct = totals.revenue ? totals.profit / totals.revenue * 100 : 0;
 
@@ -256,6 +258,33 @@ export default function ProductsSold() {
           </div>
         )}
       </Card>
+
+      {!loading && rows.length > 0 && (
+        <Card>
+          <CardTitle>Summary — {activeMonth}</CardTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
+            {[
+              { label: 'Unit Items',          value: fmtN(totals.qty),                        color: 'var(--text)' },
+              { label: 'Total Revenue',        value: fmt(totals.revenue),                     color: 'var(--accent)' },
+              { label: 'Total Expenses',       value: fmt(totals.expenses),                    color: 'var(--danger, #ef4444)' },
+              { label: 'NET PROFIT / (LOSS)',  value: fmt(totals.profit),                      color: totals.profit >= 0 ? 'var(--accent)' : 'var(--danger, #ef4444)' },
+              { label: 'Profit %',             value: `${totalProfitPct.toFixed(2)}%`,         color: totals.profit >= 0 ? 'var(--accent)' : 'var(--danger, #ef4444)' },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{
+                background: 'var(--bg, #0c0a09)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)', padding: '1rem 1.25rem'
+              }}>
+                <div style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', marginBottom: '.4rem' }}>
+                  {label}
+                </div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>
+                  {value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
