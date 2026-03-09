@@ -76,7 +76,7 @@ export default function BrandPicker() {
             fontSize: '1.6rem', fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             marginBottom: '1rem',
-          }}>Z</div>
+          }}>HQ</div>
           <h1 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
             Select a Brand
           </h1>

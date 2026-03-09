@@ -85,8 +85,8 @@ function Layout() {
       {/* Mobile top bar */}
       <div className="zen-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
-          <div style={S.logo}>Z</div>
-          <span style={{ fontWeight: 700, fontSize: '1rem' }}>Zen Finance</span>
+          <div style={S.logo}>HQ</div>
+          <span style={{ fontWeight: 700, fontSize: '1rem' }}>EcomHQ</span>
         </div>
         <button
           onClick={() => setMenuOpen(o => !o)}
@@ -108,10 +108,10 @@ function Layout() {
       {/* Sidebar */}
       <aside className={`zen-sidebar${menuOpen ? ' open' : ''}`}>
         <div style={S.brand}>
-          <div style={S.logo}>{currentUserName ? currentUserName[0].toUpperCase() : 'Z'}</div>
+          <div style={S.logo}>{currentUserName ? currentUserName[0].toUpperCase() : 'H'}</div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {currentUserName || 'Zen Finance'}
+              {currentUserName || 'EcomHQ'}
             </div>
             <div style={{ color: 'var(--muted)', fontSize: '.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {currentUserEmail}
