@@ -12,8 +12,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!token) { setUserRole(null); setCurrentUserEmail(null); setCurrentUserName(''); return; }
     authFetch('/auth/me')
-      .then(r => r.json())
+      .then(r => {
+        if (r.status === 401) { clearToken(); setToken(null); return null; }
+        return r.json();
+      })
       .then(d => {
+        if (!d) return;
         if (d.email) {
           setUserRole(d.role);
           setCurrentUserEmail(d.email);
