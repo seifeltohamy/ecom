@@ -815,7 +815,8 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
     try:
         resp = httpx.get(
             "http://app.bosta.co/api/v2/products/list",
-            headers={"authorization": api_key},
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"isActiveProducts": True, "isActiveProductVariants": True},
             timeout=15,
             follow_redirects=True,
         )
