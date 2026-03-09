@@ -106,5 +106,6 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session: added ProductsSold, StockValue, Settings pages + Railway deployment.
+Last session (2026-03-09): multi-tenant brand system — brands table, brand_id JWT isolation,
+BrandPicker page, Switch Brand flow. Migration 0006 applied to production DB.
 Pending: Bosta API direct integration, password change, cashflow CSV export.

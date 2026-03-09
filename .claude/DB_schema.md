@@ -11,6 +11,15 @@
 
 ## Tables
 
+### `brands` *(added migration 0006)*
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | Integer | PK, index |
+| name | String(128) | unique, not null |
+| created_at | DateTime | not null, default=utcnow |
+
+---
+
 ### `users`
 | Column | Type | Constraints |
 |--------|------|-------------|
@@ -19,9 +28,11 @@
 | password_hash | String(255) | not null |
 | role | Enum(UserRole) | not null, default=viewer |
 | name | String(128) | nullable |
+| brand_id | Integer | FK → brands.id, **nullable** (NULL = admin superuser) |
 | created_at | DateTime | not null, default=utcnow |
 
 **Enum UserRole:** `admin`, `viewer`
+**Note:** Admin users have `brand_id=NULL` in DB. Effective brand_id comes from JWT.
 
 ---
 
@@ -30,6 +41,7 @@
 |--------|------|-------------|
 | sku | String(64) | PK |
 | name | String(255) | not null |
+| brand_id | Integer | FK → brands.id, not null |
 
 ---
 
@@ -37,9 +49,11 @@
 | Column | Type | Constraints |
 |--------|------|-------------|
 | id | Integer | PK, index |
-| name | String(64) | unique, not null (e.g. "Mar 2026") |
+| name | String(64) | not null (e.g. "Mar 2026") |
+| brand_id | Integer | FK → brands.id, not null |
 | created_at | DateTime | not null, default=utcnow |
 
+**Note:** `name` is no longer globally unique — unique per brand.
 **Relationship:** `entries` → many `CashflowEntry` (cascade delete)
 
 ---
@@ -68,6 +82,7 @@
 | amount | Float | not null |
 | category | String(128) | not null |
 | notes | Text | nullable |
+| brand_id | Integer | FK → brands.id, not null |
 | deleted_at | DateTime | not null, default=utcnow |
 
 **Unique constraint:** `(month_name, id)` — named `uq_deleted_month_id`
@@ -85,6 +100,40 @@
 | grand_quantity | Integer | not null, default=0 |
 | grand_revenue | Float | not null, default=0.0 |
 | rows_json | Text | not null, default="[]" — JSON-encoded rows array |
+| brand_id | Integer | FK → brands.id, not null |
+
+---
+
+### `products_sold_manual`
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | Integer | PK, index |
+| month_id | Integer | FK → cashflow_months.id (CASCADE) |
+| sku | String(64) | not null |
+| price | Float | nullable |
+| new_price | Float | nullable |
+| cost | Float | nullable |
+| extra_cost | Float | nullable |
+| expense | Float | nullable |
+
+**Unique constraint:** `(month_id, sku)` — named `uq_ps_month_sku`
+
+---
+
+### `app_settings`
+| Column | Type | Constraints |
+|--------|------|-------------|
+| key | String(64) | **composite PK** with brand_id |
+| brand_id | Integer | FK → brands.id, **composite PK** with key |
+| value | Text | nullable |
+
+**Note:** PK is `(key, brand_id)` — must filter by both when querying. e.g.:
+```python
+db.query(models.AppSettings).filter(
+    models.AppSettings.key == "bosta_api_key",
+    models.AppSettings.brand_id == brand_id,
+).first()
+```
 
 ---
 
@@ -95,16 +144,12 @@
 | 0001_initial | alembic/versions/0001_initial.py | users, products, cashflow_months, cashflow_entries, deleted_cashflow_entries |
 | 0002_bosta_reports | alembic/versions/0002_bosta_reports.py | bosta_reports table |
 | 0003_user_name | alembic/versions/0003_user_name.py | users.name column |
+| 0004_products_sold | alembic/versions/0004_products_sold.py | products_sold_manual table |
+| 0005_app_settings | alembic/versions/0005_app_settings.py | app_settings key-value table |
+| 0006_multi_tenant | alembic/versions/0006_multi_tenant.py | brands table + brand_id on all business tables |
 
-**Run migrations:**
+**Run migrations (from project root with .env set):**
 ```bash
-python -c "
-from dotenv import load_dotenv; load_dotenv()
-from alembic.config import Config
-from alembic import command
-import os
-cfg = Config('alembic.ini')
-cfg.set_main_option('sqlalchemy.url', os.getenv('DATABASE_URL').replace('%','%%'))
-command.upgrade(cfg, 'head')
-"
+PYTHONPATH=. .venv/bin/alembic upgrade head
+# or on Railway: handled automatically by start_prod.sh
 ```

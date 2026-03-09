@@ -4,6 +4,45 @@
 
 ---
 
+## Last Session — 2026-03-09
+
+### What Was Done
+
+#### Multi-Tenant Brand System (full implementation)
+- New `brands` table (id, name, created_at); seed "Zen" brand via migration
+- `brand_id` FK added to: `users`, `products`, `cashflow_months`, `bosta_reports`,
+  `app_settings` (composite PK now `(key, brand_id)`), `products_sold_manual`, `deleted_cashflow_entries`
+- Migration `0006_multi_tenant.py` — backfills all existing data to brand_id=1, sets admin users to NULL
+- `get_brand_id` dep in `app/deps.py` — extracts brand_id from JWT, raises 403 if null
+- All business endpoints now filter by `brand_id: int = Depends(get_brand_id)`
+- New endpoints: `GET/POST /brands`, `DELETE /brands/{id}`, `POST /auth/select-brand`, `POST /auth/clear-brand`
+- `POST /auth/login` now includes `brand_id` + `brand_name` in JWT (admin gets null, viewer gets theirs)
+- `GET /auth/me` now returns `brand_id` + `brand_name` from JWT
+- `POST /auth/register` now requires admin auth + auto-assigns brand_id to new viewers
+- Frontend `AuthContext.jsx` — added `brandId`, `brandName` state, populated from `/auth/me`
+- `ProtectedRoute` updated — admin with `brandId===null` → redirect to `/select-brand`
+- New `BrandPicker.jsx` — standalone page to select/create brands; no sidebar layout
+- Sidebar brand badge — shows active brand name + "Switch Brand" button (admin only)
+- "Switch Brand" calls `POST /auth/clear-brand` → null-brand token → redirects to brand picker
+- Migration ran against Supabase DB successfully; backend imports verified
+
+#### Fixes from previous session
+- Bosta API auth header corrected: `{"authorization": api_key}` (no Bearer prefix)
+- Login persistence: JWT expiry extended to 30 days (`ACCESS_TOKEN_EXPIRE_MINUTES=43200`)
+- Expired token handling: `/auth/me` 401 → `clearToken()` → redirect to /login
+- SSH key set up for GitHub pushes (macOS)
+
+### Current State
+All code committed and pushed to `main`. Railway will auto-deploy via Dockerfile.
+The migration runs automatically in `start_prod.sh` (`alembic upgrade head`).
+
+### Next Session Should
+1. Verify Railway deployment with multi-tenant migration applied
+2. Test admin brand picker and switch flow on production
+3. Continue with: Bosta API direct integration, password change, cashflow CSV export
+
+---
+
 ## Last Session — 2026-03-03/04
 
 ### What Was Done

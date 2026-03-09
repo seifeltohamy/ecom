@@ -19,6 +19,10 @@
 - [x] **Dashboard (Home)** — KPI cards (month in/out/net, YTD totals), last Bosta report, top SKU, quick links
 - [x] **Mobile responsive layout** — Hamburger topbar, sidebar drawer with overlay, responsive padding
 - [x] **Loading states** — All pages show spinner bar while data fetches
+- [x] **ProductsSold page** — `/products-sold/{month}`, inline-editable cost/price/profit table
+- [x] **StockValue page** — Live Bosta API inventory, total stock value
+- [x] **Settings page** — Admin-only, saves Bosta API key per brand
+- [x] **Multi-tenant brands** — brands table, brand_id FK on all tables, JWT-based isolation, BrandPicker UI, Switch Brand
 
 ## In Progress
 
