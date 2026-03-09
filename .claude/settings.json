@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const chunks=[]; process.stdin.on\\(''data'',d=>chunks.push\\(d\\)\\); process.stdin.on\\(''end'',\\(\\)=>{const d=JSON.parse\\(Buffer.concat\\(chunks\\)\\); d.tree.filter\\(x=>x.path.toLowerCase\\(\\).includes\\(''delivery''\\)||x.path.toLowerCase\\(\\).includes\\(''order''\\)\\).forEach\\(x=>console.log\\(x.path\\)\\);}\\)\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/bostaapp/bosta-python/master/bostaSDK/delivery/list/ListAllDeliveriesRequest.py\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/bostaapp/bosta-python/master/bostaSDK/delivery/list/ListAllDeliveriesResponse.py\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/bostaapp/bosta-python/master/bostaSDK/apiClient/ApiClient.py\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/bostaapp/bosta-python/master/bostaSDK/delivery/Delivery.py\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/bostaapp/bosta-python/master/examples/delivery.py\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/bostaapp/bosta-python/master/bostaSDK/delivery/get/GetDeliveryDetailsResponse.py\")",
+      "Bash(curl -s \"https://api.github.com/repos/bostaapp/bosta-php/git/trees/master?recursive=1\")",
+      "Bash(node -e \"const chunks=[]; process.stdin.on\\(''data'',d=>chunks.push\\(d\\)\\); process.stdin.on\\(''end'',\\(\\)=>{const d=JSON.parse\\(Buffer.concat\\(chunks\\)\\); d.tree.filter\\(x=>x.path.toLowerCase\\(\\).includes\\(''delivery''\\)||x.path.toLowerCase\\(\\).includes\\(''list''\\)\\).forEach\\(x=>console.log\\(x.path\\)\\);}\\);\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/bostaapp/bosta-php/master/src/Deliveries/DeliveryClient.php\")",
+      "Bash(curl -s \"https://raw.githubusercontent.com/dreidev/bosta.co/master/index.js\")",
+      "Bash(curl -s \"https://api.github.com/repos/dreidev/bosta.co/git/trees/master?recursive=1\")",
+      "Bash(node -e \"const chunks=[]; process.stdin.on\\(''data'',d=>chunks.push\\(d\\)\\); process.stdin.on\\(''end'',\\(\\)=>{const d=JSON.parse\\(Buffer.concat\\(chunks\\)\\); d.tree.forEach\\(x=>console.log\\(x.path\\)\\);}\\);\")",
+      "WebFetch(domain:tracking.bosta.co)",
+      "Bash(curl -s -X POST http://localhost:8080/debug-upload -F \"file=@\"\"D:/OneDrive - Egypt University of Informatics/Desktop/Zen/sku-app/Inventory_Export 23-02-2026.xlsx\"\"\")",
+      "Bash(ls \"d:/OneDrive - Egypt University of Informatics/Desktop/Zen/sku-app/.env\"*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\DELL\\.claude\\projects\\d--OneDrive---Egypt-University-of-Informatics-Desktop-Zen-sku-app"
+    ]
+  }
+}
