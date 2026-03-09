@@ -23,6 +23,8 @@
 - [x] **StockValue page** — Live Bosta API inventory, total stock value
 - [x] **Settings page** — Admin-only, saves Bosta API key per brand
 - [x] **Multi-tenant brands** — brands table, brand_id FK on all tables, JWT-based isolation, BrandPicker UI, Switch Brand
+- [x] **EcomHQ rebrand** — renamed from "Zen Finance"; login page redesigned with two-column hero+form layout
+- [x] **Auth race fix** — login() decodes JWT synchronously so ProtectedRoute sees brandId before /auth/me resolves
 
 ## In Progress
 

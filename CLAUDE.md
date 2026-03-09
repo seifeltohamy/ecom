@@ -1,11 +1,11 @@
-# Zen Finance — Claude Code Project Brief
+# EcomHQ — Claude Code Project Brief
 
 > Auto-loaded at session start. Read this first. For details, see `.claude/` files.
 
 ## What This App Does
-Multi-user finance dashboard for an e-commerce business. Tracks cashflow (money in/out),
-Bosta order reports (Excel upload + API), product inventory, and sales profitability.
-Two roles: `admin` (full access) and `viewer` (all features except user management).
+Multi-brand e-commerce operations dashboard. Tracks cashflow (money in/out),
+Bosta order reports (Excel upload + API), stock inventory, and sales profitability.
+Two roles: `admin` (full access, manages brands) and `viewer` (all features except user management).
 
 ## Stack
 
@@ -20,15 +20,17 @@ Two roles: `admin` (full access) and `viewer` (all features except user manageme
 
 ## How to Run
 
-```batch
-# Dev (Windows — opens two terminals):
-start.bat
+```bash
+# Dev (macOS):
+./start.sh
 # Backend: python -m uvicorn main:app --reload --port 8080
 # Frontend: cd frontend && npm run dev (port 5173, proxies API to :8080)
 
+# Dev (Windows):
+start.bat
+
 # Prod:
-build.bat
-python -m uvicorn main:app --port 8080
+./start_prod.sh   # runs alembic migrations then uvicorn on $PORT
 ```
 
 Dev credentials: `admin@zen.com` / `Zen@2026`
@@ -106,6 +108,7 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-09): multi-tenant brand system — brands table, brand_id JWT isolation,
-BrandPicker page, Switch Brand flow. Migration 0006 applied to production DB.
+Project renamed to **EcomHQ**. Login page redesigned (two-column hero + form).
+Last session: EcomHQ rebrand, login redesign, auth race-condition fix (JWT parsed
+synchronously in login() so ProtectedRoute sees brandId before /auth/me resolves).
 Pending: Bosta API direct integration, password change, cashflow CSV export.

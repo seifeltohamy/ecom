@@ -4,6 +4,32 @@
 
 ---
 
+## Last Session — 2026-03-09 (continued)
+
+### What Was Done
+
+#### EcomHQ Rebrand
+- Project renamed from "Zen Finance" → **EcomHQ** across all frontend files
+- `frontend/index.html` title → "EcomHQ"
+- `App.jsx`: topbar + sidebar "Zen Finance" → "EcomHQ", logo letter "Z" → "HQ"
+- `BrandPicker.jsx`: logo letter "Z" → "HQ"
+
+#### Login Page Redesign
+- Two-column layout: left hero panel + right form panel
+- Hero: gradient "HQ" logo, "Your Ecommerce HQ" heading, 3 feature bullets
+  (📦 Stock inventory · 💰 Finances & cashflow · 📊 Ads analytics)
+- Mobile (<700px): hero hidden, form full width, compact mobile logo shown above form
+- CSS classes added: `.login-hero`, `.login-form-panel`, `.login-mobile-logo` in `index.css`
+
+#### Auth Race Condition Fix
+- **Bug:** Selecting a brand in BrandPicker caused immediate redirect back to `/select-brand`
+  because `navigate('/')` ran before `/auth/me` resolved, so `ProtectedRoute` saw `brandId=null`
+- **Fix:** `AuthContext.login()` now decodes the JWT payload synchronously (base64 → JSON)
+  and sets `brandId`, `role`, `brandName` before triggering the async `/auth/me` refetch
+  → `ProtectedRoute` sees the correct state in the same render cycle
+
+---
+
 ## Last Session — 2026-03-09
 
 ### What Was Done
