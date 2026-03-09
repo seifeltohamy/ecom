@@ -5,14 +5,14 @@
 
 cd "$(dirname "$0")"
 
-echo "Starting Zen Finance (dev mode)..."
+echo "Starting EcomHQ (dev mode)..."
 
 # Open a new Terminal tab for the backend
 osascript -e 'tell application "Terminal"
   activate
   tell application "System Events" to keystroke "t" using command down
   delay 0.3
-  do script "cd \"'"$(pwd)"'\" && python3 -m uvicorn main:app --reload --port 8080" in front window
+  do script "cd \"'"$(pwd)"'\" && .venv/bin/python -m uvicorn main:app --reload --port 8080" in front window
 end tell'
 
 sleep 1
