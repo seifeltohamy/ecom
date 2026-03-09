@@ -1,4 +1,4 @@
-﻿from contextlib import contextmanager
+from contextlib import contextmanager
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
@@ -33,3 +33,15 @@ def require_admin(user: models.User = Depends(get_current_user)):
     if user.role != models.UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
     return user
+
+
+def get_brand_id(token: str = Depends(oauth2_scheme)) -> int:
+    """Extract brand_id from the JWT. Raises 403 if admin has not selected a brand yet."""
+    payload = auth.decode_token(token)
+    brand_id = payload.get("brand_id")
+    if brand_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No brand selected. Please select a brand first.",
+        )
+    return int(brand_id)

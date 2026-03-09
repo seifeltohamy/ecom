@@ -1,4 +1,4 @@
-﻿from pydantic import BaseModel
+from pydantic import BaseModel
 
 
 class ProductIn(BaseModel):
@@ -39,3 +39,16 @@ class CashflowEntryUpdate(BaseModel):
 
 class UserNameUpdate(BaseModel):
     name: str
+
+
+class BrandCreate(BaseModel):
+    name: str
+
+
+class BrandOut(BaseModel):
+    id: int
+    name: str
+
+
+class BrandSelect(BaseModel):
+    brand_id: int

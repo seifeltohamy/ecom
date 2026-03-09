@@ -8,9 +8,15 @@ export function AuthProvider({ children }) {
   const [userRole,         setUserRole]         = useState(null);
   const [currentUserEmail, setCurrentUserEmail] = useState(null);
   const [currentUserName,  setCurrentUserName]  = useState('');
+  const [brandId,          setBrandId]          = useState(null);
+  const [brandName,        setBrandName]        = useState('');
 
   useEffect(() => {
-    if (!token) { setUserRole(null); setCurrentUserEmail(null); setCurrentUserName(''); return; }
+    if (!token) {
+      setUserRole(null); setCurrentUserEmail(null); setCurrentUserName('');
+      setBrandId(null); setBrandName('');
+      return;
+    }
     authFetch('/auth/me')
       .then(r => {
         if (r.status === 401) { clearToken(); setToken(null); return null; }
@@ -22,6 +28,8 @@ export function AuthProvider({ children }) {
           setUserRole(d.role);
           setCurrentUserEmail(d.email);
           setCurrentUserName(d.name || '');
+          setBrandId(d.brand_id ?? null);
+          setBrandName(d.brand_name || '');
         }
       })
       .catch(() => {});
@@ -41,7 +49,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, userRole, currentUserEmail, currentUserName, login, logout, updateName }}>
+    <AuthContext.Provider value={{ token, userRole, currentUserEmail, currentUserName, brandId, brandName, login, logout, updateName }}>
       {children}
     </AuthContext.Provider>
   );

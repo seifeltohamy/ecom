@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { authFetch } from './utils/auth.js';
 import { S } from './styles.js';
 
 import Login       from './pages/Login.jsx';
+import BrandPicker from './pages/BrandPicker.jsx';
 import Home        from './pages/Home.jsx';
 import Analytics   from './pages/Analytics.jsx';
 import Cashflow    from './pages/Cashflow.jsx';
@@ -26,8 +28,36 @@ const pageMeta = {
   '/users':          { title: 'User Management', subtitle: 'Create and manage user accounts.' },
 };
 
+function SwitchBrandButton({ close }) {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSwitch() {
+    close();
+    const res = await authFetch('/auth/clear-brand', { method: 'POST' });
+    if (res.ok) {
+      const { access_token } = await res.json();
+      login(access_token);
+      navigate('/select-brand', { replace: true });
+    }
+  }
+
+  return (
+    <button
+      onClick={handleSwitch}
+      style={{
+        background: 'none', border: 'none', color: 'var(--muted)',
+        fontSize: '.7rem', cursor: 'pointer', padding: '0',
+        textDecoration: 'underline',
+      }}
+    >
+      Switch
+    </button>
+  );
+}
+
 function Layout() {
-  const { userRole, currentUserEmail, currentUserName, logout } = useAuth();
+  const { userRole, currentUserEmail, currentUserName, brandName, logout } = useAuth();
   const location = useLocation();
   const meta = pageMeta[location.pathname] || { title: '', subtitle: '' };
   const [menuOpen, setMenuOpen] = useState(false);
@@ -89,6 +119,23 @@ function Layout() {
           </div>
         </div>
 
+        {/* Brand badge */}
+        {brandName && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '.4rem .6rem', marginBottom: '.25rem',
+            background: 'var(--surface2)', borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border)',
+          }}>
+            <span style={{ fontSize: '.75rem', color: 'var(--accent)', fontWeight: 600, letterSpacing: '.03em' }}>
+              {brandName}
+            </span>
+            {userRole === 'admin' && (
+              <SwitchBrandButton close={close} />
+            )}
+          </div>
+        )}
+
         <nav style={{ display: 'grid', gap: '.4rem' }}>
           <NavLink to="/"          end  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Home</NavLink>
           <NavLink to="/analytics"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Analytics</NavLink>
@@ -125,8 +172,10 @@ function Layout() {
 }
 
 function ProtectedRoute() {
-  const { token } = useAuth();
-  return token ? <Outlet /> : <Navigate to="/login" replace />;
+  const { token, userRole, brandId } = useAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  if (userRole === 'admin' && brandId === null) return <Navigate to="/select-brand" replace />;
+  return <Outlet />;
 }
 
 export default function App() {
@@ -135,6 +184,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/select-brand" element={<BrandPicker />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route index          element={<Home />} />

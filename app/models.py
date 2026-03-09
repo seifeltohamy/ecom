@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -11,26 +11,36 @@ class UserRole(str, enum.Enum):
     viewer = "viewer"
 
 
+class Brand(Base):
+    __tablename__ = "brands"
+    id         = Column(Integer, primary_key=True, index=True)
+    name       = Column(String(128), unique=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
+    id            = Column(Integer, primary_key=True, index=True)
+    email         = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.viewer)
-    name = Column(String(128), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    role          = Column(Enum(UserRole), nullable=False, default=UserRole.viewer)
+    name          = Column(String(128), nullable=True)
+    brand_id      = Column(Integer, ForeignKey("brands.id"), nullable=True)  # NULL = admin
+    created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class Product(Base):
     __tablename__ = "products"
-    sku = Column(String(64), primary_key=True)
-    name = Column(String(255), nullable=False)
+    sku      = Column(String(64), primary_key=True)
+    name     = Column(String(255), nullable=False)
+    brand_id = Column(Integer, ForeignKey("brands.id"), nullable=False)
 
 
 class CashflowMonth(Base):
     __tablename__ = "cashflow_months"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(64), unique=True, nullable=False)
+    id         = Column(Integer, primary_key=True, index=True)
+    name       = Column(String(64), nullable=False)
+    brand_id   = Column(Integer, ForeignKey("brands.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     entries = relationship("CashflowEntry", back_populates="month", cascade="all, delete-orphan")
@@ -38,13 +48,13 @@ class CashflowMonth(Base):
 
 class CashflowEntry(Base):
     __tablename__ = "cashflow_entries"
-    id = Column(Integer, primary_key=True, index=True)
+    id       = Column(Integer, primary_key=True, index=True)
     month_id = Column(Integer, ForeignKey("cashflow_months.id", ondelete="CASCADE"), nullable=False, index=True)
-    date = Column(String(32), nullable=False)
-    type = Column(String(8), nullable=False)
-    amount = Column(Float, nullable=False)
+    date     = Column(String(32), nullable=False)
+    type     = Column(String(8), nullable=False)
+    amount   = Column(Float, nullable=False)
     category = Column(String(128), nullable=False)
-    notes = Column(Text, nullable=True)
+    notes    = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     month = relationship("CashflowMonth", back_populates="entries")
@@ -52,13 +62,14 @@ class CashflowEntry(Base):
 
 class DeletedCashflowEntry(Base):
     __tablename__ = "deleted_cashflow_entries"
-    id = Column(Integer, primary_key=True, index=True)
+    id         = Column(Integer, primary_key=True, index=True)
     month_name = Column(String(64), nullable=False)
-    date = Column(String(32), nullable=False)
-    type = Column(String(8), nullable=False)
-    amount = Column(Float, nullable=False)
-    category = Column(String(128), nullable=False)
-    notes = Column(Text, nullable=True)
+    date       = Column(String(32), nullable=False)
+    type       = Column(String(8), nullable=False)
+    amount     = Column(Float, nullable=False)
+    category   = Column(String(128), nullable=False)
+    notes      = Column(Text, nullable=True)
+    brand_id   = Column(Integer, ForeignKey("brands.id"), nullable=False)
     deleted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (
@@ -76,6 +87,7 @@ class BostaReport(Base):
     grand_quantity = Column(Integer,  nullable=False, default=0)
     grand_revenue  = Column(Float,    nullable=False, default=0.0)
     rows_json      = Column(Text,     nullable=False, default="[]")
+    brand_id       = Column(Integer, ForeignKey("brands.id"), nullable=False)
 
 
 class ProductsSoldManual(Base):
@@ -94,5 +106,6 @@ class ProductsSoldManual(Base):
 
 class AppSettings(Base):
     __tablename__ = "app_settings"
-    key   = Column(String(64), primary_key=True)
-    value = Column(Text, nullable=True)
+    key      = Column(String(64), primary_key=True)
+    brand_id = Column(Integer, ForeignKey("brands.id"), primary_key=True)
+    value    = Column(Text, nullable=True)

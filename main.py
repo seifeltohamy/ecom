@@ -1,4 +1,4 @@
-﻿import re
+import re
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -13,7 +13,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 import openpyxl
 from sqlalchemy.orm import Session
 
-from app.deps import get_db, get_current_user, require_admin
+from app.deps import get_db, get_current_user, require_admin, get_brand_id, oauth2_scheme
 from app import models, schemas, auth
 
 app = FastAPI(title="SKU Sales Summary")
@@ -24,7 +24,14 @@ PROJECT_DIR = Path(__file__).parent
 # ── Auth routes ──────────────────────────────────────────────────────────────
 
 @app.post("/auth/register", tags=["auth"])
-def register(email: str = Form(...), password: str = Form(...), role: str = Form("viewer"), name: str = Form("")):
+def register(
+    email: str = Form(...),
+    password: str = Form(...),
+    role: str = Form("viewer"),
+    name: str = Form(""),
+    _admin: models.User = Depends(require_admin),
+    brand_id: int = Depends(get_brand_id),
+):
     if role not in ("admin", "viewer"):
         raise HTTPException(status_code=400, detail="Role must be admin or viewer")
     with get_db() as db:
@@ -35,6 +42,7 @@ def register(email: str = Form(...), password: str = Form(...), role: str = Form
             password_hash=auth.hash_password(password),
             role=models.UserRole(role),
             name=name.strip() or None,
+            brand_id=brand_id if role == "viewer" else None,
         )
         db.add(user)
         db.commit()
@@ -47,13 +55,32 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
         user = db.query(models.User).filter(models.User.email == form.username).first()
     if not user or not auth.verify_password(form.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = auth.create_access_token({"sub": user.email, "role": user.role.value})
-    return {"access_token": token, "token_type": "bearer", "role": user.role.value}
+    # Admin gets brand_id=None (must pick brand); viewer gets their brand_id
+    jwt_brand_id = None if user.role == models.UserRole.admin else user.brand_id
+    brand_name = None
+    if jwt_brand_id is not None:
+        with get_db() as db:
+            brand = db.query(models.Brand).filter(models.Brand.id == jwt_brand_id).first()
+            brand_name = brand.name if brand else None
+    token = auth.create_access_token({
+        "sub": user.email,
+        "role": user.role.value,
+        "brand_id": jwt_brand_id,
+        "brand_name": brand_name,
+    })
+    return {"access_token": token, "token_type": "bearer", "role": user.role.value, "brand_id": jwt_brand_id}
 
 
 @app.get("/auth/me", tags=["auth"])
-def me(current_user: models.User = Depends(get_current_user)):
-    return {"email": current_user.email, "role": current_user.role.value, "name": current_user.name or ""}
+def me(token: str = Depends(oauth2_scheme), current_user: models.User = Depends(get_current_user)):
+    payload = auth.decode_token(token)
+    return {
+        "email": current_user.email,
+        "role": current_user.role.value,
+        "name": current_user.name or "",
+        "brand_id": payload.get("brand_id"),
+        "brand_name": payload.get("brand_name"),
+    }
 
 
 @app.put("/users/me", tags=["auth"])
@@ -65,10 +92,81 @@ def update_my_name(payload: schemas.UserNameUpdate, current_user: models.User = 
     return {"ok": True, "name": payload.name.strip()}
 
 
+# ── Brand routes ──────────────────────────────────────────────────────────────
+
+@app.get("/brands", tags=["brands"])
+def list_brands(_admin: models.User = Depends(require_admin)):
+    with get_db() as db:
+        brands = db.query(models.Brand).order_by(models.Brand.created_at).all()
+        return [{"id": b.id, "name": b.name} for b in brands]
+
+
+@app.post("/brands", tags=["brands"])
+def create_brand(payload: schemas.BrandCreate, _admin: models.User = Depends(require_admin)):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Brand name is required.")
+    with get_db() as db:
+        if db.query(models.Brand).filter(models.Brand.name == name).first():
+            raise HTTPException(status_code=400, detail="Brand name already exists.")
+        brand = models.Brand(name=name)
+        db.add(brand)
+        db.commit()
+        db.refresh(brand)
+        return {"id": brand.id, "name": brand.name}
+
+
+@app.delete("/brands/{brand_id_param}", tags=["brands"])
+def delete_brand(brand_id_param: int, _admin: models.User = Depends(require_admin)):
+    with get_db() as db:
+        brand = db.query(models.Brand).filter(models.Brand.id == brand_id_param).first()
+        if not brand:
+            raise HTTPException(status_code=404, detail="Brand not found.")
+        # Block deletion if any data exists for this brand
+        has_data = (
+            db.query(models.CashflowMonth).filter(models.CashflowMonth.brand_id == brand_id_param).first()
+            or db.query(models.Product).filter(models.Product.brand_id == brand_id_param).first()
+            or db.query(models.BostaReport).filter(models.BostaReport.brand_id == brand_id_param).first()
+        )
+        if has_data:
+            raise HTTPException(status_code=400, detail="Cannot delete brand with existing data.")
+        db.delete(brand)
+        db.commit()
+    return {"ok": True}
+
+
+@app.post("/auth/select-brand", tags=["auth"])
+def select_brand(payload: schemas.BrandSelect, current_user: models.User = Depends(require_admin)):
+    with get_db() as db:
+        brand = db.query(models.Brand).filter(models.Brand.id == payload.brand_id).first()
+        if not brand:
+            raise HTTPException(status_code=404, detail="Brand not found.")
+        brand_name = brand.name
+    token = auth.create_access_token({
+        "sub": current_user.email,
+        "role": "admin",
+        "brand_id": payload.brand_id,
+        "brand_name": brand_name,
+    })
+    return {"access_token": token}
+
+
+@app.post("/auth/clear-brand", tags=["auth"])
+def clear_brand(current_user: models.User = Depends(require_admin)):
+    """Issue a null-brand admin token so admin returns to the brand picker."""
+    token = auth.create_access_token({
+        "sub": current_user.email,
+        "role": "admin",
+        "brand_id": None,
+        "brand_name": None,
+    })
+    return {"access_token": token}
+
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def get_products_map(db: Session) -> dict:
-    products = db.query(models.Product).all()
+def get_products_map(db: Session, brand_id: int) -> dict:
+    products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
     return {p.sku: p.name for p in products}
 
 
@@ -79,11 +177,6 @@ def parse_description_text(text: str) -> list[tuple]:
 
 
 def aggregate_excel(workbook, date_from: str = None, date_to: str = None) -> dict:
-    """
-    Aggregate sales data from the Excel workbook.
-    Optionally filter rows by 'Delivered at' column using date_from / date_to (YYYY-MM-DD).
-    Returns: {sku: {price: {quantity, total}}}
-    """
     from datetime import datetime, date
 
     ws = workbook.active
@@ -94,7 +187,6 @@ def aggregate_excel(workbook, date_from: str = None, date_to: str = None) -> dic
     except ValueError:
         raise HTTPException(status_code=400, detail="No 'Description' column found in Excel.")
 
-    # Find "Delivered at" column — exact match first, then fallback
     headers_lower = [str(h).strip().lower() if h else "" for h in headers]
     if "delivered at" in headers_lower:
         deliv_idx = headers_lower.index("delivered at")
@@ -104,7 +196,6 @@ def aggregate_excel(workbook, date_from: str = None, date_to: str = None) -> dic
             None
         )
 
-    # Parse filter dates
     dt_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else None
     dt_to   = datetime.strptime(date_to,   "%Y-%m-%d").date() if date_to   else None
 
@@ -112,12 +203,10 @@ def aggregate_excel(workbook, date_from: str = None, date_to: str = None) -> dic
     order_count = 0
 
     for row in ws.iter_rows(min_row=2, values_only=True):
-        # Apply date filter if column found and dates provided
         if deliv_idx is not None and (dt_from or dt_to):
             raw = row[deliv_idx]
             if raw is None:
                 continue
-            # Handle datetime object or string
             if isinstance(raw, (datetime, date)):
                 row_date = raw.date() if isinstance(raw, datetime) else raw
             else:
@@ -153,12 +242,10 @@ def aggregate_excel(workbook, date_from: str = None, date_to: str = None) -> dic
 
 
 def build_report(sku_data: dict, products: dict, order_count: int = 0) -> dict:
-    """Turn aggregated data into a structured report."""
     rows = []
     grand_qty = 0
     grand_rev = 0.0
 
-    # Sort by products order first, unknown SKUs at the end sorted by revenue
     product_order = {sku: i for i, sku in enumerate(products.keys())}
 
     def sort_key(sku):
@@ -222,12 +309,12 @@ async def debug_upload(file: UploadFile = File(...)):
     return {"headers": headers, "delivered_at_index": deliv_idx, "samples": samples}
 
 
-
 @app.post("/upload")
 async def upload_excel(
     file: UploadFile = File(...),
     date_from: str = Form(None),
     date_to:   str = Form(None),
+    brand_id: int = Depends(get_brand_id),
     _user: models.User = Depends(get_current_user),
 ):
     if not file.filename.endswith((".xlsx", ".xls")):
@@ -239,7 +326,7 @@ async def upload_excel(
     wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
     sku_data, order_count = aggregate_excel(wb, date_from=date_from, date_to=date_to)
     with get_db() as db:
-        products = get_products_map(db)
+        products = get_products_map(db, brand_id)
     report = build_report(sku_data, products, order_count)
 
     from datetime import datetime as _dt
@@ -252,6 +339,7 @@ async def upload_excel(
             grand_quantity = report["grand_quantity"],
             grand_revenue  = report["grand_revenue"],
             rows_json      = json.dumps(report["rows"]),
+            brand_id       = brand_id,
         )
         db.add(saved)
         db.commit()
@@ -262,32 +350,36 @@ async def upload_excel(
 
 
 @app.get("/products")
-def get_products(_user: models.User = Depends(get_current_user)):
+def get_products(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        products = db.query(models.Product).all()
+        products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
         return {p.sku: p.name for p in products}
 
 
 @app.post("/products")
-def add_product(product: schemas.ProductIn, _user: models.User = Depends(get_current_user)):
+def add_product(product: schemas.ProductIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     sku = product.sku.strip()
     name = product.name.strip()
     if not sku or not name:
         raise HTTPException(status_code=400, detail="SKU and name are required.")
     with get_db() as db:
-        existing = db.query(models.Product).filter(models.Product.sku == sku).first()
+        existing = db.query(models.Product).filter(
+            models.Product.sku == sku, models.Product.brand_id == brand_id
+        ).first()
         if existing:
             existing.name = name
         else:
-            db.add(models.Product(sku=sku, name=name))
+            db.add(models.Product(sku=sku, name=name, brand_id=brand_id))
         db.commit()
     return {"ok": True, "sku": sku, "name": name}
 
 
 @app.delete("/products/{sku}")
-def delete_product(sku: str, _user: models.User = Depends(get_current_user)):
+def delete_product(sku: str, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        product = db.query(models.Product).filter(models.Product.sku == sku).first()
+        product = db.query(models.Product).filter(
+            models.Product.sku == sku, models.Product.brand_id == brand_id
+        ).first()
         if not product:
             raise HTTPException(status_code=404, detail="SKU not found.")
         db.delete(product)
@@ -296,147 +388,141 @@ def delete_product(sku: str, _user: models.User = Depends(get_current_user)):
 
 
 @app.get("/cashflow/months")
-def get_cashflow_months(_user: models.User = Depends(get_current_user)):
+def get_cashflow_months(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        months = db.query(models.CashflowMonth).order_by(models.CashflowMonth.created_at).all()
+        months = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.brand_id == brand_id
+        ).order_by(models.CashflowMonth.created_at).all()
         return [m.name for m in months]
 
 
 @app.post("/cashflow/months")
-def add_cashflow_month(payload: schemas.CashflowMonthIn, _user: models.User = Depends(get_current_user)):
+def add_cashflow_month(payload: schemas.CashflowMonthIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     month = payload.month.strip()
     if not month:
         raise HTTPException(status_code=400, detail="Month is required.")
     with get_db() as db:
-        existing = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        existing = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
+        ).first()
         if not existing:
-            db.add(models.CashflowMonth(name=month))
+            db.add(models.CashflowMonth(name=month, brand_id=brand_id))
             db.commit()
-        months = db.query(models.CashflowMonth).order_by(models.CashflowMonth.created_at).all()
+        months = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.brand_id == brand_id
+        ).order_by(models.CashflowMonth.created_at).all()
         return {"ok": True, "months": [m.name for m in months]}
 
 
 @app.get("/cashflow/{month}")
-def get_cashflow_month(month: str, _user: models.User = Depends(get_current_user)):
+def get_cashflow_month(month: str, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        m = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
+        ).first()
         if not m:
             return []
-        rows = db.query(models.CashflowEntry).filter(models.CashflowEntry.month_id == m.id).order_by(models.CashflowEntry.created_at).all()
+        rows = db.query(models.CashflowEntry).filter(
+            models.CashflowEntry.month_id == m.id
+        ).order_by(models.CashflowEntry.created_at).all()
         return [
-            {
-                "id": r.id,
-                "date": r.date,
-                "type": r.type,
-                "amount": r.amount,
-                "category": r.category,
-                "notes": r.notes or "",
-            }
+            {"id": r.id, "date": r.date, "type": r.type, "amount": r.amount,
+             "category": r.category, "notes": r.notes or ""}
             for r in rows
         ]
 
 
 @app.post("/cashflow/{month}/entries")
-def add_cashflow_entry(month: str, entry: schemas.CashflowEntryIn, _user: models.User = Depends(get_current_user)):
+def add_cashflow_entry(month: str, entry: schemas.CashflowEntryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        m = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
+        ).first()
         if not m:
-            m = models.CashflowMonth(name=month)
+            m = models.CashflowMonth(name=month, brand_id=brand_id)
             db.add(m)
             db.commit()
             db.refresh(m)
         row = models.CashflowEntry(
-            month_id=m.id,
-            date=entry.date,
-            type=entry.type,
-            amount=entry.amount,
-            category=entry.category,
-            notes=entry.notes,
+            month_id=m.id, date=entry.date, type=entry.type,
+            amount=entry.amount, category=entry.category, notes=entry.notes,
         )
         db.add(row)
         db.commit()
-        rows = db.query(models.CashflowEntry).filter(models.CashflowEntry.month_id == m.id).order_by(models.CashflowEntry.created_at).all()
+        rows = db.query(models.CashflowEntry).filter(
+            models.CashflowEntry.month_id == m.id
+        ).order_by(models.CashflowEntry.created_at).all()
         return {"ok": True, "rows": [
-            {
-                "id": r.id,
-                "date": r.date,
-                "type": r.type,
-                "amount": r.amount,
-                "category": r.category,
-                "notes": r.notes or "",
-            } for r in rows
+            {"id": r.id, "date": r.date, "type": r.type, "amount": r.amount,
+             "category": r.category, "notes": r.notes or ""}
+            for r in rows
         ]}
 
 
 @app.delete("/cashflow/{month}/entries/{entry_id}")
-def delete_cashflow_entry(month: str, entry_id: int, _user: models.User = Depends(get_current_user)):
+def delete_cashflow_entry(month: str, entry_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        m = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
+        ).first()
         if not m:
             raise HTTPException(status_code=404, detail="Month not found.")
-        row = db.query(models.CashflowEntry).filter(models.CashflowEntry.month_id == m.id, models.CashflowEntry.id == entry_id).first()
+        row = db.query(models.CashflowEntry).filter(
+            models.CashflowEntry.month_id == m.id, models.CashflowEntry.id == entry_id
+        ).first()
         if not row:
             raise HTTPException(status_code=404, detail="Entry not found.")
         db.add(models.DeletedCashflowEntry(
-            id=row.id,
-            month_name=month,
-            date=row.date,
-            type=row.type,
-            amount=row.amount,
-            category=row.category,
-            notes=row.notes or "",
+            id=row.id, month_name=month, date=row.date, type=row.type,
+            amount=row.amount, category=row.category, notes=row.notes or "",
+            brand_id=brand_id,
         ))
         db.delete(row)
         db.commit()
-        rows = db.query(models.CashflowEntry).filter(models.CashflowEntry.month_id == m.id).order_by(models.CashflowEntry.created_at).all()
+        rows = db.query(models.CashflowEntry).filter(
+            models.CashflowEntry.month_id == m.id
+        ).order_by(models.CashflowEntry.created_at).all()
         return {"ok": True, "rows": [
-            {
-                "id": r.id,
-                "date": r.date,
-                "type": r.type,
-                "amount": r.amount,
-                "category": r.category,
-                "notes": r.notes or "",
-            } for r in rows
+            {"id": r.id, "date": r.date, "type": r.type, "amount": r.amount,
+             "category": r.category, "notes": r.notes or ""}
+            for r in rows
         ]}
 
-
-# ── Feature 1: Edit cashflow entry ───────────────────────────────────────────
 
 @app.put("/cashflow/{month}/entries/{entry_id}")
-def update_cashflow_entry(month: str, entry_id: int, entry: schemas.CashflowEntryUpdate, _user: models.User = Depends(get_current_user)):
+def update_cashflow_entry(month: str, entry_id: int, entry: schemas.CashflowEntryUpdate, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        m = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
+        ).first()
         if not m:
             raise HTTPException(status_code=404, detail="Month not found.")
-        row = db.query(models.CashflowEntry).filter(models.CashflowEntry.month_id == m.id, models.CashflowEntry.id == entry_id).first()
+        row = db.query(models.CashflowEntry).filter(
+            models.CashflowEntry.month_id == m.id, models.CashflowEntry.id == entry_id
+        ).first()
         if not row:
             raise HTTPException(status_code=404, detail="Entry not found.")
-        row.date     = entry.date
-        row.type     = entry.type
-        row.amount   = entry.amount
-        row.category = entry.category
-        row.notes    = entry.notes
+        row.date = entry.date; row.type = entry.type; row.amount = entry.amount
+        row.category = entry.category; row.notes = entry.notes
         db.commit()
-        rows = db.query(models.CashflowEntry).filter(models.CashflowEntry.month_id == m.id).order_by(models.CashflowEntry.created_at).all()
+        rows = db.query(models.CashflowEntry).filter(
+            models.CashflowEntry.month_id == m.id
+        ).order_by(models.CashflowEntry.created_at).all()
         return {"ok": True, "rows": [
-            {
-                "id": r.id,
-                "date": r.date,
-                "type": r.type,
-                "amount": r.amount,
-                "category": r.category,
-                "notes": r.notes or "",
-            } for r in rows
+            {"id": r.id, "date": r.date, "type": r.type, "amount": r.amount,
+             "category": r.category, "notes": r.notes or ""}
+            for r in rows
         ]}
 
 
-# ── Feature 5: Bosta report history ──────────────────────────────────────────
+# ── Bosta report history ──────────────────────────────────────────────────────
 
 @app.get("/reports")
-def list_reports(_user: models.User = Depends(get_current_user)):
+def list_reports(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        reports = db.query(models.BostaReport).order_by(models.BostaReport.uploaded_at.desc()).all()
+        reports = db.query(models.BostaReport).filter(
+            models.BostaReport.brand_id == brand_id
+        ).order_by(models.BostaReport.uploaded_at.desc()).all()
         return [
             {
                 "id": r.id,
@@ -452,9 +538,11 @@ def list_reports(_user: models.User = Depends(get_current_user)):
 
 
 @app.get("/reports/{report_id}")
-def get_report(report_id: int, _user: models.User = Depends(get_current_user)):
+def get_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        r = db.query(models.BostaReport).filter(models.BostaReport.id == report_id).first()
+        r = db.query(models.BostaReport).filter(
+            models.BostaReport.id == report_id, models.BostaReport.brand_id == brand_id
+        ).first()
         if not r:
             raise HTTPException(status_code=404, detail="Report not found.")
         return {
@@ -469,10 +557,10 @@ def get_report(report_id: int, _user: models.User = Depends(get_current_user)):
         }
 
 
-# ── Feature 3: Dashboard summary ─────────────────────────────────────────────
+# ── Dashboard summary ─────────────────────────────────────────────────────────
 
 @app.get("/dashboard/summary")
-def dashboard_summary(month: str = None, _user: models.User = Depends(get_current_user)):
+def dashboard_summary(month: str = None, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     from datetime import datetime as _dt
     now = _dt.utcnow()
     if month:
@@ -483,7 +571,10 @@ def dashboard_summary(month: str = None, _user: models.User = Depends(get_curren
         current_year = str(now.year)
 
     with get_db() as db:
-        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == current_month_name).first()
+        m = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == current_month_name,
+            models.CashflowMonth.brand_id == brand_id
+        ).first()
         this_month_in = this_month_out = 0.0
         if m:
             for e in db.query(models.CashflowEntry).filter(models.CashflowEntry.month_id == m.id).all():
@@ -492,7 +583,9 @@ def dashboard_summary(month: str = None, _user: models.User = Depends(get_curren
                 else:
                     this_month_out += e.amount
 
-        all_months = db.query(models.CashflowMonth).all()
+        all_months = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.brand_id == brand_id
+        ).all()
         ytd_ids = [mm.id for mm in all_months if mm.name.split()[-1] == current_year]
         total_in_ytd = total_out_ytd = 0.0
         if ytd_ids:
@@ -502,7 +595,9 @@ def dashboard_summary(month: str = None, _user: models.User = Depends(get_curren
                 else:
                     total_out_ytd += e.amount
 
-        last_rpt = db.query(models.BostaReport).order_by(models.BostaReport.uploaded_at.desc()).first()
+        last_rpt = db.query(models.BostaReport).filter(
+            models.BostaReport.brand_id == brand_id
+        ).order_by(models.BostaReport.uploaded_at.desc()).first()
         last_report = top_sku = None
         if last_rpt:
             last_report = {
@@ -527,12 +622,14 @@ def dashboard_summary(month: str = None, _user: models.User = Depends(get_curren
     }
 
 
-# ── Feature 4: User management (admin only) ───────────────────────────────────
+# ── User management (admin only) ───────────────────────────────────────────────
 
 @app.get("/users")
-def list_users(_admin: models.User = Depends(require_admin)):
+def list_users(brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
     with get_db() as db:
-        users = db.query(models.User).order_by(models.User.created_at).all()
+        users = db.query(models.User).filter(
+            models.User.brand_id == brand_id
+        ).order_by(models.User.created_at).all()
         return [
             {
                 "id": u.id,
@@ -569,7 +666,7 @@ def delete_user(user_id: int, admin: models.User = Depends(require_admin)):
     return {"ok": True}
 
 
-# ── Feature 6: Products Sold ──────────────────────────────────────────────────
+# ── Products Sold ──────────────────────────────────────────────────────────────
 
 def _calc_profit(revenue, cost, qty, extra_cost, expense):
     profit = revenue - (cost or 0) * qty - (extra_cost or 0) - (expense or 0)
@@ -578,7 +675,7 @@ def _calc_profit(revenue, cost, qty, extra_cost, expense):
 
 
 @app.get("/products-sold/{month}")
-def get_products_sold(month: str, _user: models.User = Depends(get_current_user)):
+def get_products_sold(month: str, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     from datetime import datetime as _dt
     try:
         dt = _dt.strptime(month, "%b %Y")
@@ -587,14 +684,18 @@ def get_products_sold(month: str, _user: models.User = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Invalid month format. Use 'Mar 2026'.")
 
     with get_db() as db:
-        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        m = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
+        ).first()
         if not m:
             raise HTTPException(status_code=404, detail="Month not found.")
 
-        # Latest Bosta report whose date_from falls in this month
         report = (
             db.query(models.BostaReport)
-            .filter(models.BostaReport.date_from.like(f"{prefix}%"))
+            .filter(
+                models.BostaReport.brand_id == brand_id,
+                models.BostaReport.date_from.like(f"{prefix}%"),
+            )
             .order_by(models.BostaReport.uploaded_at.desc())
             .first()
         )
@@ -606,7 +707,7 @@ def get_products_sold(month: str, _user: models.User = Depends(get_current_user)
                     "revenue": row.get("total_revenue", 0.0),
                 }
 
-        products = db.query(models.Product).all()
+        products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
         manual_rows = {
             r.sku: r
             for r in db.query(models.ProductsSoldManual)
@@ -624,16 +725,9 @@ def get_products_sold(month: str, _user: models.User = Depends(get_current_user)
             expense    = man.expense    if man else None
             profit, profit_pct = _calc_profit(b["revenue"], cost, b["qty"], extra_cost, expense)
             result.append({
-                "sku":        p.sku,
-                "name":       p.name,
-                "price":      price,
-                "cost":       cost,
-                "extra_cost": extra_cost,
-                "qty":        b["qty"],
-                "revenue":    b["revenue"],
-                "expense":    expense,
-                "profit":     profit,
-                "profit_pct": profit_pct,
+                "sku": p.sku, "name": p.name, "price": price, "cost": cost,
+                "extra_cost": extra_cost, "qty": b["qty"], "revenue": b["revenue"],
+                "expense": expense, "profit": profit, "profit_pct": profit_pct,
             })
         return result
 
@@ -647,9 +741,12 @@ class ProductsSoldUpdate(BaseModel):
 
 @app.put("/products-sold/{month}/{sku}")
 def update_products_sold(month: str, sku: str, payload: ProductsSoldUpdate,
+                         brand_id: int = Depends(get_brand_id),
                          _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        m = db.query(models.CashflowMonth).filter(models.CashflowMonth.name == month).first()
+        m = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
+        ).first()
         if not m:
             raise HTTPException(status_code=404, detail="Month not found.")
 
@@ -663,50 +760,53 @@ def update_products_sold(month: str, sku: str, payload: ProductsSoldUpdate,
             row = models.ProductsSoldManual(month_id=m.id, sku=sku)
             db.add(row)
 
-        row.price      = payload.price
-        row.cost       = payload.cost
-        row.extra_cost = payload.extra_cost
-        row.expense    = payload.expense
+        row.price = payload.price; row.cost = payload.cost
+        row.extra_cost = payload.extra_cost; row.expense = payload.expense
         db.commit()
     return {"ok": True}
 
 
-# ── Feature 7: App Settings ───────────────────────────────────────────────────
+# ── App Settings ───────────────────────────────────────────────────────────────
 
 class SettingsUpdate(BaseModel):
     bosta_api_key: str | None = None
 
 
 @app.get("/settings")
-def get_settings(_admin: models.User = Depends(require_admin)):
+def get_settings(brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
     with get_db() as db:
-        rows = db.query(models.AppSettings).all()
+        rows = db.query(models.AppSettings).filter(models.AppSettings.brand_id == brand_id).all()
         data = {r.key: r.value for r in rows}
     return {"bosta_api_key": data.get("bosta_api_key", "")}
 
 
 @app.put("/settings")
-def update_settings(payload: SettingsUpdate, _admin: models.User = Depends(require_admin)):
+def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
     updates = {"bosta_api_key": payload.bosta_api_key or ""}
     with get_db() as db:
         for k, v in updates.items():
-            row = db.query(models.AppSettings).filter(models.AppSettings.key == k).first()
+            row = db.query(models.AppSettings).filter(
+                models.AppSettings.key == k, models.AppSettings.brand_id == brand_id
+            ).first()
             if row:
                 row.value = v
             else:
-                db.add(models.AppSettings(key=k, value=v))
+                db.add(models.AppSettings(key=k, brand_id=brand_id, value=v))
         db.commit()
     return {"ok": True}
 
 
-# ── Feature 8: Stock Value ────────────────────────────────────────────────────
+# ── Stock Value ────────────────────────────────────────────────────────────────
 
 @app.get("/stock-value")
-def get_stock_value(_user: models.User = Depends(get_current_user)):
+def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     import httpx
 
     with get_db() as db:
-        setting = db.query(models.AppSettings).filter(models.AppSettings.key == "bosta_api_key").first()
+        setting = db.query(models.AppSettings).filter(
+            models.AppSettings.key == "bosta_api_key",
+            models.AppSettings.brand_id == brand_id,
+        ).first()
         api_key = setting.value if setting else ""
 
     if not api_key:
@@ -734,9 +834,9 @@ def get_stock_value(_user: models.User = Depends(get_current_user)):
     rows = []
 
     for p in products:
-        p_name    = p.get("name") or p.get("nameAr") or "Unknown"
-        p_price   = p.get("defaultPrice") or 0
-        variants  = p.get("productsVariances") or []
+        p_name   = p.get("name") or p.get("nameAr") or "Unknown"
+        p_price  = p.get("defaultPrice") or 0
+        variants = p.get("productsVariances") or []
 
         if variants:
             for v in variants:
@@ -747,25 +847,15 @@ def get_stock_value(_user: models.User = Depends(get_current_user)):
                 price = v.get("variantPrice") or p_price
                 opt   = (v.get("optionsString") or "").strip()
                 name  = f"{p_name} – {opt}" if opt else p_name
-                rows.append({
-                    "sku":         sku,
-                    "name":        name,
-                    "qty":         qty,
-                    "price":       price,
-                    "stock_value": round(qty * price, 2),
-                })
+                rows.append({"sku": sku, "name": name, "qty": qty, "price": price,
+                             "stock_value": round(qty * price, 2)})
         else:
             sku = p.get("referenceId")
             if not sku:
                 continue
             qty = p.get("quantity") or 0
-            rows.append({
-                "sku":         sku,
-                "name":        p_name,
-                "qty":         qty,
-                "price":       p_price,
-                "stock_value": round(qty * p_price, 2),
-            })
+            rows.append({"sku": sku, "name": p_name, "qty": qty, "price": p_price,
+                         "stock_value": round(qty * p_price, 2)})
 
     total_qty   = sum(r["qty"] for r in rows)
     total_value = round(sum(r["stock_value"] for r in rows), 2)
