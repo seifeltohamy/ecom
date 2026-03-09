@@ -35,7 +35,18 @@ export function AuthProvider({ children }) {
       .catch(() => {});
   }, [token]);
 
-  const login  = (t) => { saveToken(t); setToken(t); };
+  const login  = (t) => {
+    saveToken(t);
+    // Immediately parse JWT payload so brandId/role are set synchronously
+    // before any navigation — prevents ProtectedRoute from seeing brandId=null
+    try {
+      const payload = JSON.parse(atob(t.split('.')[1]));
+      if (payload.role)  setUserRole(payload.role);
+      setBrandId(payload.brand_id ?? null);
+      if (payload.brand_name !== undefined) setBrandName(payload.brand_name || '');
+    } catch {}
+    setToken(t);
+  };
   const logout = ()  => { clearToken(); setToken(null); };
 
   const updateName = async (name) => {
