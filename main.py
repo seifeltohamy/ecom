@@ -813,9 +813,10 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
         raise HTTPException(status_code=400, detail="Bosta API key not configured. Go to Settings to add it.")
 
     try:
-        resp = httpx.get(
+        resp = httpx.request(
+            "GET",
             "http://app.bosta.co/api/v2/products/list",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={"isActiveProducts": True, "isActiveProductVariants": True},
             timeout=15,
             follow_redirects=True,
