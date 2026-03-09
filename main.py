@@ -715,7 +715,7 @@ def get_stock_value(_user: models.User = Depends(get_current_user)):
     try:
         resp = httpx.get(
             "http://app.bosta.co/api/v2/products/list",
-            headers={"Authorization": f"Bearer {api_key}"},
+            headers={"authorization": api_key},
             timeout=15,
             follow_redirects=True,
         )
