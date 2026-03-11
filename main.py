@@ -1046,62 +1046,41 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
 
     try:
         h = {"Authorization": api_key}
-        # Step 1: fetch all products (paginated)
         products = []
         page = 0
-        page_size = 100
+        limit = 100
         while True:
             resp = httpx.get(
-                "http://app.bosta.co/api/v2/products",
+                "http://app.bosta.co/api/v2/products/fulfillment/list-products",
                 headers=h,
-                params={"pageNumber": page, "pageSize": page_size},
+                params={"page": page, "limit": limit},
                 timeout=15,
                 follow_redirects=True,
             )
             if resp.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"Bosta API returned {resp.status_code}: {resp.text[:500]}")
-            batch = resp.json().get("data", {}).get("products", [])
+            data = resp.json().get("data", {})
+            batch = data.get("data", [])
             products.extend(batch)
-            if len(batch) < page_size:
+            if len(batch) < limit:
                 break
             page += 1
-
-        # Step 2: fetch every product individually to get bostaSku + productsVariances
-        for i, p in enumerate(products):
-            r = httpx.get(f"http://app.bosta.co/api/v2/products/{p['id']}", headers=h, timeout=15, follow_redirects=True)
-            if r.status_code == 200:
-                products[i] = r.json().get("data", p)
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach Bosta API: {str(e)}")
+
     rows = []
-
     for p in products:
-        p_name   = p.get("name") or p.get("nameAr") or "Unknown"
-        p_price  = p.get("defaultPrice") or 0
-        variants = p.get("productsVariances") or []
-
-        if variants:
-            for v in variants:
-                sku      = v.get("bostaSku") or str(v.get("id", ""))
-                opt      = (v.get("optionsString") or "").strip()
-                # For single-variant (default created), don't append option to name
-                name     = f"{p_name} - {opt}" if opt and not v.get("defaultCreated") else p_name
-                price    = v.get("variantPrice") or p_price
-                on_hand  = v.get("variantQuantity") or 0
-                reserved = v.get("reservedQuantity") or 0
-                rows.append({"sku": sku, "name": name, "price": price,
-                             "on_hand": on_hand, "reserved": reserved,
-                             "stock_value": round(on_hand * price, 2)})
-        else:
-            sku      = p.get("bostaSku") or str(p.get("id", ""))
-            on_hand  = p.get("quantity") or 0
-            reserved = p.get("reservedQuantity") or 0
-            rows.append({"sku": sku, "name": p_name, "price": p_price,
-                         "on_hand": on_hand, "reserved": reserved,
-                         "stock_value": round(on_hand * p_price, 2)})
+        sku      = p.get("product_code") or str(p.get("id", ""))
+        name     = p.get("name") or "Unknown"
+        price    = p.get("list_price") or 0
+        on_hand  = p.get("qty_available") or 0
+        reserved = p.get("virtual_available") or 0
+        rows.append({"sku": sku, "name": name, "price": price,
+                     "on_hand": on_hand, "reserved": reserved,
+                     "stock_value": round(on_hand * price, 2)})
 
     total_onhand = sum(r["on_hand"] for r in rows)
     total_value  = round(sum(r["stock_value"] for r in rows), 2)
