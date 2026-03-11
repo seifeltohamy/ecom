@@ -4,6 +4,87 @@
 
 ---
 
+## Last Session — 2026-03-11 (continued, part 4)
+
+### What Was Done
+
+#### main.py split into `app/routers/` package
+`main.py` was 1344 lines. Split into 6 router files + slim entry point:
+
+| File | Lines | Contents |
+|------|-------|----------|
+| `app/routers/auth.py` | ~170 | `/auth/*`, `/brands/*`, `/users/*` |
+| `app/routers/cashflow.py` | ~220 | `/cashflow/*`, `/categories/*` |
+| `app/routers/dashboard.py` | ~170 | `/dashboard/summary`, `/admin/overview`, `/admin/brand-settings` |
+| `app/routers/products.py` | ~150 | `/products`, `/products-sold/*` |
+| `app/routers/settings.py` | ~150 | `/settings`, `/stock-value`, `/stock-value/purchase-price` |
+| `app/routers/bosta.py` | ~320 | Excel helpers (`aggregate_excel`, `build_report`, `_process_excel`), `/upload`, `/debug-upload`, `/reports/*`, `/automation/*`, `/sku-cost-items/*` |
+| `main.py` | 37 | App creation + `include_router` × 6 + SPA serving |
+
+`app/routers/__init__.py` created (empty). All 38 API routes verified present after refactor.
+
+**Note:** `pending_exports` dict and `sys.path.insert(automation)` now live in `app/routers/bosta.py`.
+
+#### Bosta Orders — 6 UI/UX improvements (from plan)
+1. **Fix "Save failed" in CostPopup** — wrapped body in `CostItemsBody` Pydantic model on backend; frontend sends `{ items: payload }`. Root cause: `/sku-cost-items` was missing from Vite proxy → requests returned SPA HTML → `!res.ok`.
+2. **Cost cell always opens popup** — removed `PlEditCell` from cost column; single click always opens `CostPopup` whether row has items or not.
+3. **Automate Export button + SSE flow** — `GET /automation/run-export` streams live logs via `StreamingResponse`; `POST /automation/upload/{file_id}` uploads sorted file. Frontend: `AutomateModal.jsx` (new) uses `fetch + ReadableStream` (not `EventSource` — doesn't support auth headers).
+4. **Removed "Filter by date" button** — `DateRangeButton` and related state removed from `BostaOrders.jsx`.
+5. **Stat cards moved below P&L table** — `<StatBar>` now renders after `</Card>`.
+6. **Stat cards updated** — Now shows Orders, Total Revenue, Expenses, Net Profit (color-coded), Profit % (color-coded).
+
+#### Cost cell fill-drag
+Added orange fill handle (bottom-right corner) to cost cells that have a breakdown. Drag down → copies the full `costItemsCopy` array to all rows in range → saves each via `PUT /sku-cost-items/{sku}`. Highlight tint applies to dragged rows. Click guard prevents popup opening mid-drag.
+
+#### automation/bosta_daily.py
+- Moved `logging.basicConfig` inside `main()` — avoids side effects on import
+- Added `sort_only(path)` — sorts all rows by "Delivered at" without filtering to current month; returns `(output_path, min_date_iso, max_date_iso)`
+
+---
+
+## Last Session — 2026-03-11 (continued, part 3)
+
+### What Was Done
+
+#### Bosta Daily Automation — Implementation & Debugging
+
+**Root cause fixes discovered during live testing:**
+- Bosta login URL is `https://business.bosta.co/signin` (not `app.bosta.co/login`)
+- After login, Bosta redirects to `/overview` (not `/orders`) — fixed `wait_for_url` pattern
+- Export flow sends file via **email** (not direct download) — rewrote download logic entirely
+
+**Backend (`main.py`):**
+- `SettingsUpdate` schema: added `bosta_email_password` field
+- `GET /settings`: now returns `bosta_email_password` alongside existing fields
+- `PUT /settings`: now saves `bosta_email_password` per brand
+- `GET /admin/brand-settings`: added `bosta_email_password` to KEYS + response
+
+**Frontend (`frontend/src/pages/Settings.jsx`):**
+- Added "Gmail App Password" field with hint text explaining how to generate it
+- State: `bostaEmailPassword` / `showEmailPass`; loaded on mount, included in save payload
+
+**`automation/bosta_daily.py` — full rewrite of download logic:**
+- Login: `https://business.bosta.co/signin` → wait for `/overview` → navigate to `/orders`
+- Click "Successful" tab → click "Export" (Bosta emails the file)
+- New `fetch_export_from_email()`: polls Gmail IMAP (`imaplib`, stdlib) for email from `no-reply@bosta.co`, extracts download link
+- New `download_from_link()`: downloads file via httpx
+- Main loop: skips brands with no `bosta_email_password` set (logs warning)
+
+**`automation/.env.automation`:** Temporarily set to `http://localhost:8080` for local testing.
+
+### Current State (updated during session)
+- Login ✅ → `/overview` ✅ → navigate to `/orders` ✅
+- Click "تم بنجاح" (Successful) tab ✅ — Bosta UI is in Arabic; selector `text=تم بنجاح`
+- Click "تحميل" (Export) button ✅ — selector `button:has-text("تحميل")`
+- Export email arrives in Gmail ✅ (confirmed manually)
+- IMAP polling fixed: removed `UNSEEN` filter (unreliable), now uses timestamp comparison — only picks up emails newer than when export was triggered
+- Full end-to-end confirmed ✅ — 2448 rows downloaded, 832 filtered to current month, uploaded as report_id=4 (832 orders, revenue=526430.49)
+- `.env.automation` switched back to production URL
+- Debug screenshot line removed from script
+- **Feature complete. Pending: `git push` + Railway deploy + `setup_mac.sh` to register launchd job**
+
+---
+
 ## Last Session — 2026-03-11 (continued, part 2)
 
 ### What Was Done

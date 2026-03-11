@@ -143,3 +143,14 @@ class StockPurchasePrice(Base):
     purchase_price = Column(Float, nullable=False, default=0.0)
 
     __table_args__ = (UniqueConstraint("brand_id", "sku", name="uq_spp_brand_sku"),)
+
+
+class SkuCostItem(Base):
+    __tablename__ = "sku_cost_items"
+    id       = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    sku      = Column(String(64), nullable=False)
+    name     = Column(String(128), nullable=False)
+    amount   = Column(Float, nullable=False, default=0)
+
+    __table_args__ = (UniqueConstraint("brand_id", "sku", "name", name="uq_sci_brand_sku_name"),)

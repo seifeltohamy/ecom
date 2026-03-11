@@ -160,6 +160,21 @@
 
 ---
 
+### `sku_cost_items` *(added migration 0013)*
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | Integer | PK, autoincrement |
+| brand_id | Integer | FK → brands.id CASCADE, not null, index |
+| sku | String(64) | not null |
+| name | String(128) | not null |
+| amount | Float | not null, default=0 |
+
+**Unique constraint:** `(brand_id, sku, name)` — named `uq_sci_brand_sku_name`
+**Indexes:** `ix_sci_brand_id` on brand_id; `ix_sci_brand_sku` on (brand_id, sku)
+**Note:** Global per brand/SKU — not per-report. Full replace on save (delete + insert).
+
+---
+
 ### `app_settings`
 | Column | Type | Constraints |
 |--------|------|-------------|
@@ -193,6 +208,7 @@ db.query(models.AppSettings).filter(
 | 0010_fix_cashflow_month_unique | alembic/versions/0010_fix_cashflow_month_unique.py | replace global UNIQUE(name) on cashflow_months with UNIQUE(name, brand_id) |
 | 0011_add_indexes | alembic/versions/0011_add_indexes.py | 7 indexes: brand_id on cashflow_months/bosta_reports/cashflow_categories/products/users; bosta_reports.uploaded_at; cashflow_entries.created_at |
 | 0012_stock_purchase_prices | alembic/versions/0012_stock_purchase_prices.py | stock_purchase_prices table (brand_id, sku, purchase_price); unique on (brand_id, sku) |
+| 0013_sku_cost_items | alembic/versions/0013_sku_cost_items.py | sku_cost_items table (brand_id, sku, name, amount); unique on (brand_id, sku, name) |
 
 **Run migrations (from project root with .env set):**
 ```bash

@@ -1,0 +1,3 @@
+.venv/bin/python automation/bosta_daily.py
+
+tail -f /tmp/bosta_daily.log

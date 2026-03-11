@@ -42,6 +42,14 @@
 
 ## Admin (Admin Only, No Brand Required)
 
+### GET /admin/brand-settings
+- **Auth:** Bearer + require_admin (no brand_id needed)
+- **Response:** array of brands with Bosta credentials configured:
+  ```json
+  [{ "brand_id": 1, "brand_name": "Zen", "bosta_email": "...", "bosta_password": "...", "bosta_api_key": "...", "bosta_email_password": "..." }]
+  ```
+- **Note:** Only returns brands where `bosta_email` is set. Used by `automation/bosta_daily.py`.
+
 ### GET /admin/overview
 - **Auth:** Bearer + require_admin (no brand_id needed)
 - **Response:** array of brand KPI objects:
@@ -252,6 +260,20 @@
 - **Body:** `{ sku: string, price: float }`
 - **Response:** `{ ok: true }`
 - **Note:** Upserts `stock_purchase_prices` for the current brand's SKU
+
+---
+
+## SKU Cost Items *(brand-scoped)*
+
+### GET /sku-cost-items
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** `{ [sku]: [{ name: string, amount: float }] }` — all items for this brand, grouped by SKU
+
+### PUT /sku-cost-items/{sku}
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `[{ name: string, amount: float }]` — full replace (deletes existing rows for this SKU, inserts new ones)
+- **Response:** `{ ok: true }`
+- **Note:** Items are global per brand/SKU — not per-report. Used for itemised cost breakdown in P&L table.
 
 ---
 

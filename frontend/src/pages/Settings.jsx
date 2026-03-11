@@ -18,11 +18,13 @@ const labelStyle = {
 };
 
 export default function Settings() {
-  const [apiKey,        setApiKey]        = useState('');
-  const [bostaEmail,    setBostaEmail]    = useState('');
-  const [bostaPassword, setBostaPassword] = useState('');
-  const [showKey,       setShowKey]       = useState(false);
-  const [showPass,      setShowPass]      = useState(false);
+  const [apiKey,              setApiKey]              = useState('');
+  const [bostaEmail,          setBostaEmail]          = useState('');
+  const [bostaPassword,       setBostaPassword]       = useState('');
+  const [bostaEmailPassword,  setBostaEmailPassword]  = useState('');
+  const [showKey,             setShowKey]             = useState(false);
+  const [showPass,            setShowPass]            = useState(false);
+  const [showEmailPass,       setShowEmailPass]       = useState(false);
   const [loading,       setLoading]       = useState(true);
   const [saving,        setSaving]        = useState(false);
   const [msg,           setMsg]           = useState(null);
@@ -34,6 +36,7 @@ export default function Settings() {
         setApiKey(d.bosta_api_key || '');
         setBostaEmail(d.bosta_email || '');
         setBostaPassword(d.bosta_password || '');
+        setBostaEmailPassword(d.bosta_email_password || '');
         setLoading(false);
       });
   }, []);
@@ -45,9 +48,10 @@ export default function Settings() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        bosta_api_key:  apiKey.trim(),
-        bosta_email:    bostaEmail.trim(),
-        bosta_password: bostaPassword,
+        bosta_api_key:        apiKey.trim(),
+        bosta_email:          bostaEmail.trim(),
+        bosta_password:       bostaPassword,
+        bosta_email_password: bostaEmailPassword,
       }),
     });
     setSaving(false);
@@ -109,7 +113,7 @@ export default function Settings() {
 
         {/* Bosta Password */}
         <label style={labelStyle}>Bosta Login Password</label>
-        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1.25rem' }}>
           <input
             type={showPass ? 'text' : 'password'}
             value={loading ? '' : bostaPassword}
@@ -119,6 +123,23 @@ export default function Settings() {
             style={inputStyle}
           />
           {toggleBtn(showPass, setShowPass)}
+        </div>
+
+        {/* Gmail App Password */}
+        <label style={labelStyle}>Gmail App Password <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(for report email download)</span></label>
+        <p style={{ fontSize: '.8rem', color: 'var(--muted)', marginBottom: '.5rem', marginTop: '-.25rem' }}>
+          Generate at Gmail → Settings → Security → 2-Step Verification → App Passwords. Not your Gmail login password.
+        </p>
+        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1.5rem' }}>
+          <input
+            type={showEmailPass ? 'text' : 'password'}
+            value={loading ? '' : bostaEmailPassword}
+            onChange={e => setBostaEmailPassword(e.target.value)}
+            disabled={loading}
+            placeholder="xxxx xxxx xxxx xxxx"
+            style={{ ...inputStyle, fontFamily: 'monospace' }}
+          />
+          {toggleBtn(showEmailPass, setShowEmailPass)}
         </div>
 
         <Btn onClick={save} disabled={saving || loading}>

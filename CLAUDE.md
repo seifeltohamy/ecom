@@ -79,6 +79,7 @@ import { S } from '../styles.js';
 - **Never** skip adding a route to `pageMeta` in `App.jsx` when adding a page
 - **Never** fuzzy-match Bosta Excel column names — match `"Delivered at"` exactly
 - **Never** use `https://app.bosta.co` — use `http://` with `follow_redirects=True`
+- **Never** let a page file grow beyond ~400 lines — extract sub-components to `components/<feature>/` (see `.claude/patterns.md` → "File Size" section)
 
 ## Before Touching X, Read Y
 
@@ -104,10 +105,13 @@ import { S } from '../styles.js';
 | `frontend/src/index.css` | CSS variables, responsive classes |
 | `frontend/src/utils/auth.js` | `authFetch`, `getToken`, `saveToken`, `clearToken` |
 | `frontend/src/utils/format.js` | `fmt()` (currency), `fmtN()` (integer) |
+| `frontend/src/utils/evalFormula.js` | P&L formula evaluator |
 | `frontend/src/utils/constants.js` | Money in/out category lists |
+| `frontend/src/components/pl/` | P&L primitives: PlEditCell, RefTd, CostPopup, PlTableRow |
+| `frontend/src/components/ReportHistory.jsx` | Bosta report history card |
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-11): Stock Value page upgraded — Consumer Price (from Bosta) + editable Purchase Price per SKU (auto-saved, migration 0012 `stock_purchase_prices`). Bosta API swap to `fulfillment/list-products` (single call, no N+1). Cashflow duration filter + newest-first sort. Admin Overview Portal at `/admin`.
-All migrations through 0012 applied locally; not yet deployed to Railway.
+Last session (2026-03-11): P&L enhancements — Unknown Product inline naming, Ads column auto-computed (price×5%+CPP), cost breakdown popup (migration 0013 `sku_cost_items`, drag-down copy). BostaOrders.jsx split into `components/pl/` + `utils/evalFormula.js`. Bosta daily automation complete and tested end-to-end.
+All migrations through 0013 applied locally; not yet deployed to Railway.
 Pending: password change, cashflow CSV export.

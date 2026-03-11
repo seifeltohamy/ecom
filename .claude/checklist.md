@@ -33,6 +33,11 @@
 - [x] **Admin Overview Portal** — `/admin` route (no sidebar), `GET /admin/overview` endpoint, cross-brand KPI table, "View Overview →" from brand picker
 - [x] **Bosta fulfillment API swap** — `/stock-value` now uses single `GET /api/v2/products/fulfillment/list-products` call (no N+1 per-product detail calls)
 - [x] **Stock Value — Consumer & Purchase Price** — Migration 0012 `stock_purchase_prices` table; Consumer Price from Bosta, editable Purchase Price (auto-saved), Consumer Value + Purchase Value columns + summary cards
+- [x] **Bosta daily automation** — Playwright + Gmail IMAP pipeline fully working. Login → Successful tab (Arabic: تم بنجاح) → Export (تحميل) → email → IMAP download → sort/filter → upload. launchd job at 7 AM. Settings page has bosta_email + bosta_password + bosta_email_password (Gmail App Password) per brand.
+- [x] **P&L enhancements** — Unknown Product inline naming (POST /products); Ads column auto-computed as (price×5%)+CPP; Cost breakdown popup (click, global per SKU via migration 0013 `sku_cost_items`); fill-drag copies breakdown across rows
+- [x] **Bosta Orders UX overhaul** — Cost cell always opens popup (no direct edit); "Automate Export" SSE button; DateRangeButton removed; StatBar moved below P&L (Orders/Revenue/Expense/Net Profit/Profit%); fill-drag on cost cells
+- [x] **main.py split into app/routers/** — auth, cashflow, dashboard, products, settings, bosta routers; main.py reduced to 37 lines
+- [x] **BostaOrders component split** — `utils/evalFormula.js`, `components/pl/{PlEditCell,RefTd,CostPopup,PlTableRow}.jsx`, `components/ReportHistory.jsx`; BostaOrders.jsx ~280 lines (state + layout only)
 
 ## In Progress
 

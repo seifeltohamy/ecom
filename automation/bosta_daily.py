@@ -2,11 +2,13 @@
 """
 bosta_daily.py — Daily Bosta export automation
 
-For each brand configured in EcomHQ Settings (bosta_email + bosta_password):
-  1. Login to Bosta via Playwright and download the full deliveries Excel
-  2. Sort ALL rows by "Delivered at" (ascending)
-  3. Filter to current month only
-  4. Upload sorted+filtered Excel to EcomHQ portal
+For each brand configured in EcomHQ Settings (bosta_email + bosta_password + bosta_email_password):
+  1. Login to business.bosta.co and click Export on the Successful orders tab
+     → Bosta emails the Excel file to the bosta_email inbox
+  2. Poll Gmail IMAP for the export email → extract download link → download file
+  3. Sort ALL rows by "Delivered at" (ascending)
+  4. Filter to current month only
+  5. Upload sorted+filtered Excel to EcomHQ portal
 
 Config: automation/.env.automation (copy from .env.automation.example)
 Logs:   /tmp/bosta_daily.log  (or LOG_FILE in config)
@@ -14,9 +16,13 @@ Logs:   /tmp/bosta_daily.log  (or LOG_FILE in config)
 Run manually: .venv/bin/python automation/bosta_daily.py
 """
 
+import email as email_lib
+import imaplib
 import os
 import logging
+import re
 import tempfile
+import time
 from datetime import date, datetime
 
 import httpx
@@ -26,19 +32,14 @@ from playwright.sync_api import sync_playwright
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-CFG_PATH = os.path.join(os.path.dirname(__file__), ".env.automation")
-cfg = dotenv_values(CFG_PATH)
+CFG_PATH   = os.path.join(os.path.dirname(__file__), ".env.automation")
+cfg        = dotenv_values(CFG_PATH)
 
-ECOMHQ_URL   = cfg.get("ECOMHQ_URL",            "https://ecom-production-a643.up.railway.app")
-ADMIN_EMAIL   = cfg.get("ECOMHQ_ADMIN_EMAIL",   "")
-ADMIN_PASS    = cfg.get("ECOMHQ_ADMIN_PASSWORD", "")
-LOG_FILE      = cfg.get("LOG_FILE",              "/tmp/bosta_daily.log")
+ECOMHQ_URL  = cfg.get("ECOMHQ_URL",            "https://ecom-production-a643.up.railway.app")
+ADMIN_EMAIL = cfg.get("ECOMHQ_ADMIN_EMAIL",     "")
+ADMIN_PASS  = cfg.get("ECOMHQ_ADMIN_PASSWORD",  "")
+LOG_FILE    = cfg.get("LOG_FILE",               "/tmp/bosta_daily.log")
 
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
 log = logging.getLogger(__name__)
 
 # ── Step 1: Fetch brand configs ───────────────────────────────────────────────
@@ -55,48 +56,119 @@ def get_brand_configs():
                   headers={"Authorization": f"Bearer {token}"},
                   timeout=15)
     r.raise_for_status()
-    return r.json(), token  # [{brand_id, brand_name, bosta_email, bosta_password}], token
+    return r.json(), token  # [{brand_id, brand_name, bosta_email, bosta_password, bosta_email_password}], token
 
-# ── Step 2: Download full Excel from Bosta ────────────────────────────────────
+# ── Step 2a: Trigger export via Playwright ────────────────────────────────────
 
-def download_bosta_excel(email: str, password: str, download_dir: str) -> str:
-    """Login to Bosta and download the full deliveries Excel. Returns local file path."""
+def trigger_bosta_export(email: str, password: str) -> None:
+    """Login to business.bosta.co, click Successful tab, click Export.
+    Bosta sends the Excel file to the email inbox — no direct download here."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context(accept_downloads=True)
+        ctx = browser.new_context()
         page = ctx.new_page()
 
-        log.info("  Navigating to Bosta login…")
-        page.goto("https://app.bosta.co/login")
-        page.fill('input[name="email"], input[type="email"]', email)
-        page.fill('input[name="password"], input[type="password"]', password)
-        page.click('button[type="submit"]')
-        page.wait_for_url("**/dashboard**", timeout=20000)
-
-        log.info("  Navigating to deliveries page…")
-        page.goto("https://app.bosta.co/deliveries")
+        log.info("  Navigating to Bosta signin…")
+        page.goto("https://business.bosta.co/signin")
         page.wait_for_load_state("networkidle")
 
-        # Click Export button — no date filter (download everything)
-        # NOTE: If this selector fails, inspect Bosta's export button and update below
-        log.info("  Clicking Export…")
-        with page.expect_download(timeout=60000) as dl_info:
-            page.click('button:has-text("Export"), button:has-text("Download"), [data-testid="export-btn"]')
+        page.fill('input[type="email"], input[name="email"]', email)
+        page.fill('input[type="password"], input[name="password"]', password)
+        page.click('button[type="submit"]')
+        page.wait_for_url("**/overview**", timeout=20000)
+        page.wait_for_load_state("networkidle")
 
-        download = dl_info.value
-        filename = download.suggested_filename or "bosta_export.xlsx"
-        path = os.path.join(download_dir, filename)
-        download.save_as(path)
-        log.info(f"  Downloaded → {path}")
+        log.info("  Navigating to orders page…")
+        page.goto("https://business.bosta.co/orders")
+        page.wait_for_load_state("networkidle")
+
+        log.info("  Clicking Successful tab (تم بنجاح)…")
+        page.click('text=تم بنجاح', timeout=15000)
+        page.wait_for_load_state("networkidle")
+
+        log.info("  Clicking Export (تحميل)…")
+        page.click('button:has-text("تحميل")')
+        # Bosta sends file to email — no browser download to capture
+        page.wait_for_timeout(3000)
 
         ctx.close()
         browser.close()
-        return path
+        log.info("  Export triggered — Bosta will email the file.")
+
+# ── Step 2b: Fetch export link from Gmail IMAP ────────────────────────────────
+
+def fetch_export_from_email(gmail_user: str, gmail_app_password: str,
+                             timeout: int = 300) -> str:
+    """Poll Gmail IMAP for Bosta export email, return download link."""
+    from datetime import timezone
+    import email.utils
+
+    triggered_at = time.time()
+
+    mail = imaplib.IMAP4_SSL("imap.gmail.com")
+    mail.login(gmail_user, gmail_app_password)
+
+    deadline = triggered_at + timeout
+    while time.time() < deadline:
+        # Re-select inbox each iteration to refresh
+        mail.select("inbox")
+        _, msgs = mail.search(None, 'FROM "no-reply@bosta.co" SUBJECT "Export"')
+        ids = msgs[0].split()
+        if ids:
+            # Check most recent emails first (reversed)
+            for msg_id in reversed(ids[-5:]):
+                _, data = mail.fetch(msg_id, "(RFC822)")
+                msg = email_lib.message_from_bytes(data[0][1])
+
+                # Only use emails that arrived after we triggered the export
+                date_str = msg.get("Date", "")
+                try:
+                    msg_time = email.utils.parsedate_to_datetime(date_str).timestamp()
+                except Exception:
+                    msg_time = 0
+
+                if msg_time < triggered_at - 60:
+                    continue  # older email, skip
+
+                # Extract download link from body
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() in ("text/html", "text/plain"):
+                            body += part.get_payload(decode=True).decode(errors="ignore")
+                else:
+                    body = msg.get_payload(decode=True).decode(errors="ignore")
+
+                links = re.findall(r'https?://[^\s"<>\']+', body)
+                for link in links:
+                    if "download" in link.lower() or "export" in link.lower() or "storage" in link.lower():
+                        log.info(f"  Found export link: {link[:80]}…")
+                        mail.logout()
+                        return link
+
+        log.info("  Export email not yet received, waiting 15s…")
+        time.sleep(15)
+
+    mail.logout()
+    raise TimeoutError("Bosta export email not received within timeout")
+
+
+def download_from_link(link: str, download_dir: str) -> str:
+    """Download file from URL, return local path."""
+    r = httpx.get(link, follow_redirects=True, timeout=60)
+    r.raise_for_status()
+    filename = link.split("/")[-1].split("?")[0] or "bosta_export.xlsx"
+    if not filename.endswith(".xlsx"):
+        filename += ".xlsx"
+    path = os.path.join(download_dir, filename)
+    with open(path, "wb") as f:
+        f.write(r.content)
+    log.info(f"  File saved → {path}")
+    return path
 
 # ── Step 3: Sort then Filter ──────────────────────────────────────────────────
 
 def parse_delivered_at(val) -> date | None:
-    """Parse a 'Delivered at' cell value to a date object."""
     if not val:
         return None
     s = str(val).strip()
@@ -109,17 +181,13 @@ def parse_delivered_at(val) -> date | None:
 
 
 def sort_then_filter(path: str) -> tuple[str, str, str]:
-    """
-    1. Sort ALL rows ascending by 'Delivered at'
-    2. Filter to current month only
-    Returns (output_path, date_from_iso, date_to_iso)
-    """
+    """Sort ALL rows by 'Delivered at' ascending, then filter to current month.
+    Returns (output_path, date_from_iso, date_to_iso)."""
     wb = openpyxl.load_workbook(path)
     ws = wb.active
     rows = list(ws.iter_rows(values_only=True))
     header = rows[0]
 
-    # Find "Delivered at" column — exact match (project quirk)
     col_idx = next((i for i, h in enumerate(header) if h == "Delivered at"), None)
     if col_idx is None:
         raise ValueError(f"'Delivered at' column not found. Headers: {header}")
@@ -128,11 +196,8 @@ def sort_then_filter(path: str) -> tuple[str, str, str]:
     first = today.replace(day=1)
 
     data = list(rows[1:])
-
-    # Step 1: Sort ALL rows by "Delivered at" ascending
     data.sort(key=lambda r: parse_delivered_at(r[col_idx]) or date.min)
 
-    # Step 2: Filter to current month
     filtered = [
         r for r in data
         if (d := parse_delivered_at(r[col_idx])) and first <= d <= today
@@ -140,7 +205,6 @@ def sort_then_filter(path: str) -> tuple[str, str, str]:
 
     log.info(f"  Rows before filter: {len(data)} → after filter: {len(filtered)}")
 
-    # Rewrite sheet with header + filtered+sorted rows
     ws.delete_rows(2, ws.max_row)
     for row in filtered:
         ws.append(list(row))
@@ -149,11 +213,37 @@ def sort_then_filter(path: str) -> tuple[str, str, str]:
     wb.save(out)
     return out, first.isoformat(), today.isoformat()
 
+def sort_only(path: str) -> tuple[str, str, str]:
+    """Sort all rows by 'Delivered at' ascending (no month filter).
+    Returns (output_path, min_date_iso, max_date_iso)."""
+    wb = openpyxl.load_workbook(path)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    header = rows[0]
+
+    col_idx = next((i for i, h in enumerate(header) if h == "Delivered at"), None)
+    if col_idx is None:
+        raise ValueError(f"'Delivered at' column not found. Headers: {header}")
+
+    data = sorted(rows[1:], key=lambda r: parse_delivered_at(r[col_idx]) or date.min)
+    dates = [parse_delivered_at(r[col_idx]) for r in data if parse_delivered_at(r[col_idx])]
+    min_date = dates[0].isoformat()  if dates else date.today().replace(day=1).isoformat()
+    max_date = dates[-1].isoformat() if dates else date.today().isoformat()
+
+    ws.delete_rows(2, ws.max_row)
+    for row in data:
+        ws.append(list(row))
+
+    out = path.replace(".xlsx", "_sorted.xlsx")
+    wb.save(out)
+    log.info(f"  Sorted {len(data)} rows: {min_date} → {max_date}")
+    return out, min_date, max_date
+
+
 # ── Step 4: Upload to EcomHQ ──────────────────────────────────────────────────
 
 def upload_to_ecomhq(admin_token: str, brand_id: int,
                      file_path: str, date_from: str, date_to: str) -> dict:
-    """Select brand JWT, then upload the Excel file."""
     r = httpx.post(f"{ECOMHQ_URL}/auth/select-brand",
                    json={"brand_id": brand_id},
                    headers={"Authorization": f"Bearer {admin_token}"},
@@ -178,6 +268,11 @@ def upload_to_ecomhq(admin_token: str, brand_id: int,
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    logging.basicConfig(
+        filename=LOG_FILE,
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
     log.info("=== bosta_daily.py started ===")
 
     if not ADMIN_EMAIL or not ADMIN_PASS:
@@ -197,15 +292,22 @@ def main():
     log.info(f"Processing {len(brands)} brand(s)…")
 
     for brand in brands:
-        name     = brand["brand_name"]
-        brand_id = brand["brand_id"]
-        email    = brand["bosta_email"]
-        password = brand["bosta_password"]
+        name           = brand["brand_name"]
+        brand_id       = brand["brand_id"]
+        email          = brand["bosta_email"]
+        password       = brand["bosta_password"]
+        email_password = brand.get("bosta_email_password", "")
+
+        if not email_password:
+            log.warning(f"  Brand '{name}': no bosta_email_password set — skipping.")
+            continue
 
         log.info(f"--- Brand: {name} (id={brand_id}) ---")
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                path = download_bosta_excel(email, password, tmp)
+                trigger_bosta_export(email, password)
+                link = fetch_export_from_email(email, email_password)
+                path = download_from_link(link, tmp)
                 sorted_path, date_from, date_to = sort_then_filter(path)
                 result = upload_to_ecomhq(admin_token, brand_id, sorted_path, date_from, date_to)
                 log.info(

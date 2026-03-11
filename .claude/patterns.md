@@ -40,18 +40,36 @@ Source: `app/deps.py`
 
 ---
 
-### Pydantic Schemas — Always in schemas.py
-Define all request/response shapes in `app/schemas.py`, never inline in `main.py`.
+### Router Organisation — app/routers/ package
+All route handlers live in `app/routers/`, not `main.py`. `main.py` only does app creation + `include_router` calls.
+
+| Router file | Route prefixes |
+|-------------|----------------|
+| `app/routers/auth.py` | `/auth/*`, `/brands/*`, `/users/*` |
+| `app/routers/cashflow.py` | `/cashflow/*`, `/categories/*` |
+| `app/routers/dashboard.py` | `/dashboard/*`, `/admin/*` |
+| `app/routers/products.py` | `/products`, `/products-sold/*` |
+| `app/routers/settings.py` | `/settings`, `/stock-value/*` |
+| `app/routers/bosta.py` | `/upload`, `/debug-upload`, `/reports/*`, `/automation/*`, `/sku-cost-items/*` |
+
+`bosta.py` also owns `pending_exports` dict and the `sys.path.insert(automation)` call.
+
+Inline Pydantic models (specific to one router) are defined at the top of the relevant router file. Shared cross-router schemas belong in `app/schemas.py`.
+
+---
+
+### Pydantic Schemas — In schemas.py or router file
+Shared request/response shapes go in `app/schemas.py`. Route-specific models can be defined inline at the top of the router file.
 ```python
-# In app/schemas.py:
+# Shared (app/schemas.py):
 class UserNameUpdate(BaseModel):
     name: str
 
-# In main.py:
-def update_name(payload: UserNameUpdate, ...):
-    user.name = payload.name.strip() or None
+# Route-specific (app/routers/bosta.py):
+class CostItemsBody(BaseModel):
+    items: list[CostItemIn]
 ```
-Source: `app/schemas.py`, `main.py`
+Source: `app/schemas.py`, `app/routers/`
 
 ---
 
@@ -64,7 +82,7 @@ else:
     db.add(models.Product(sku=sku, name=name))
 db.commit()
 ```
-Source: `main.py` → `POST /products`
+Source: `app/routers/products.py` → `POST /products`
 
 ---
 
@@ -89,7 +107,7 @@ for fmt in ["%m-%d-%Y, %H:%M:%S", "%m-%d-%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"]:
         continue
 ```
 SKU regex: `r"BostaSKU:(BO-\d+)\s*-\s*quantity:(\d+)\s*-\s*itemPrice:([\d.]+)"`
-Source: `main.py` → `parse_description_text()`, `POST /upload`
+Source: `app/routers/bosta.py` → `parse_description_text()`, `POST /upload`
 
 ---
 
@@ -108,7 +126,7 @@ API key retrieved from DB:
 setting = db.query(models.AppSettings).filter_by(key="bosta_api_key").first()
 api_key = setting.value if setting else None
 ```
-Source: `main.py` → `GET /stock-value`
+Source: `app/routers/settings.py` → `GET /stock-value`
 
 ---
 
@@ -295,6 +313,42 @@ Source: `frontend/src/pages/ProductsSold.jsx` → `EditCell` component
 
 ---
 
+### File Size — Split into Components When a Page Gets Large
+When a page or component file exceeds ~400 lines, extract sub-components into separate files.
+
+**Rule:** Page files (`pages/`) own state + layout only. Pure UI logic lives in `components/`.
+
+**Where to put extracted components:**
+- Generic reusable UI → `frontend/src/components/`
+- Feature-specific primitives → `frontend/src/components/<feature>/` (e.g. `components/pl/`)
+- Pure utility functions → `frontend/src/utils/`
+
+**BostaOrders split (reference implementation):**
+```
+utils/evalFormula.js              — formula evaluator (pure fn)
+components/pl/PlEditCell.jsx      — editable cell with formula + fill handle
+components/pl/RefTd.jsx           — formula-mode reference cell
+components/pl/CostPopup.jsx       — cost breakdown modal
+components/pl/PlTableRow.jsx      — single P&L <tr> with all cells
+components/ReportHistory.jsx      — Bosta report history card
+pages/BostaOrders.jsx             — state + layout (~280 lines)
+```
+
+**Anti-pattern:** Defining helper components (PlEditCell, CostPopup, etc.) as local functions inside the page file — they become invisible to search, can't be tested or reused, and bloat the file.
+
+---
+
+### Vite Proxy — Every New API Route Must Be Registered
+**Every new backend route prefix must be added to `frontend/vite.config.js` or requests silently return HTML (the SPA), causing `!res.ok` failures.**
+```js
+'/sku-cost-items': { target: 'http://localhost:8080', changeOrigin: true },
+'/automation':     { target: 'http://localhost:8080', changeOrigin: true },
+```
+Add `bypass: ...` only for routes that are also browser-navigable page paths (e.g. `/settings`, `/admin`).
+Source: `frontend/vite.config.js`
+
+---
+
 ## Anti-Patterns Reference
 
 | Anti-pattern | Correct alternative |
@@ -310,4 +364,5 @@ Source: `frontend/src/pages/ProductsSold.jsx` → `EditCell` component
 | `useContext(AuthContext)` directly | `useAuth()` |
 | Inline category array | `moneyInCategories` / `moneyOutCategories` from constants.js |
 | New page without `pageMeta` entry | Always add `pageMeta` entry in `App.jsx` |
-| Pydantic schema inline in `main.py` | Define in `app/schemas.py` |
+| Route handlers in `main.py` | Define in `app/routers/<name>.py` |
+| New API route not in vite.config.js proxy | Always add prefix to `frontend/vite.config.js` |
