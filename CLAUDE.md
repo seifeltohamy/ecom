@@ -108,8 +108,6 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-11): Multi-tenant cashflow fixed (migration 0010 — per-brand unique constraint).
-DB indexes added (migration 0011 — 7 indexes on brand_id + sorting columns).
-Admin Overview Portal added — `/admin` route shows cross-brand KPI table; accessible from brand picker.
-All migrations through 0011 applied locally; not yet deployed to Railway.
-Pending: password change, cashflow CSV export, Bosta API quantity mismatch.
+Last session (2026-03-11): Stock Value page upgraded — Consumer Price (from Bosta) + editable Purchase Price per SKU (auto-saved, migration 0012 `stock_purchase_prices`). Bosta API swap to `fulfillment/list-products` (single call, no N+1). Cashflow duration filter + newest-first sort. Admin Overview Portal at `/admin`.
+All migrations through 0012 applied locally; not yet deployed to Railway.
+Pending: password change, cashflow CSV export.

@@ -4,6 +4,29 @@
 
 ---
 
+## Last Session — 2026-03-11 (continued, part 2)
+
+### What Was Done
+
+#### Bosta Stock Value — fulfillment endpoint swap
+- Replaced 2-step API approach (`GET /api/v2/products` list + N `GET /api/v2/products/{id}` detail calls) with single paginated call to `GET /api/v2/products/fulfillment/list-products`
+- Field mapping: `product_code → sku`, `list_price → consumer_price`, `qty_available → on_hand`, `virtual_available → reserved`
+- Backend-only change; frontend response shape updated to match
+
+#### Stock Value — Consumer Price & Purchase Price
+- **Migration 0012** (`stock_purchase_prices` table): `(brand_id, sku) → purchase_price Float`, unique on `(brand_id, sku)`, index on `brand_id`. Applied locally.
+- **`app/models.py`**: added `StockPurchasePrice` model
+- **`GET /stock-value`**: now returns per-row `consumer_price`, `consumer_value`, `purchase_price`, `purchase_value` + totals `total_consumer_value`, `total_purchase_value`
+- **`PUT /stock-value/purchase-price`** (body: `{sku, price}`): upserts purchase price for a SKU per brand
+- **`frontend/src/pages/StockValue.jsx`**: editable Purchase Price column (blue tint, auto-saves on blur/Enter), Purchase Value column, totals for both in footer, summary cards for Consumer Value + Purchase Value
+
+### Current State
+- All migrations applied through 0012
+- Stock Value page now shows both Consumer and Purchase perspectives
+- All changes pushed to GitHub
+
+---
+
 ## Last Session — 2026-03-11 (continued)
 
 ### What Was Done

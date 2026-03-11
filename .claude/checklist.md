@@ -31,6 +31,8 @@
 - [x] **Multi-tenant cashflow fix** — Migration 0010 replaced global `UNIQUE(name)` on `cashflow_months` with per-brand `UNIQUE(name, brand_id)`; added `res.ok` checks + error display in Cashflow.jsx submit/delete
 - [x] **DB indexes** — Migration 0011 adds 7 indexes on `brand_id` columns + `bosta_reports.uploaded_at` + `cashflow_entries.created_at`
 - [x] **Admin Overview Portal** — `/admin` route (no sidebar), `GET /admin/overview` endpoint, cross-brand KPI table, "View Overview →" from brand picker
+- [x] **Bosta fulfillment API swap** — `/stock-value` now uses single `GET /api/v2/products/fulfillment/list-products` call (no N+1 per-product detail calls)
+- [x] **Stock Value — Consumer & Purchase Price** — Migration 0012 `stock_purchase_prices` table; Consumer Price from Bosta, editable Purchase Price (auto-saved), Consumer Value + Purchase Value columns + summary cards
 
 ## In Progress
 

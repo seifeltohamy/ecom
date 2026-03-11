@@ -226,11 +226,32 @@
 
 ### GET /stock-value
 - **Auth:** Bearer (any role) + brand in JWT
+- **Source:** Bosta `GET /api/v2/products/fulfillment/list-products` (paginated, single call)
 - **Response:**
-  ```
-  { rows: [{ sku, name, qty, price, stock_value }], total_qty, total_value }
+  ```json
+  {
+    "rows": [{
+      "sku": "BO-12345",
+      "name": "Product Name",
+      "consumer_price": 250.0,
+      "purchase_price": 120.0,
+      "on_hand": 10,
+      "reserved": 2,
+      "consumer_value": 2500.0,
+      "purchase_value": 1200.0
+    }],
+    "total_onhand": 10,
+    "total_consumer_value": 2500.0,
+    "total_purchase_value": 1200.0
+  }
   ```
 - **Errors:** 400 if no Bosta API key set; 502 if Bosta API unreachable or returns error
+
+### PUT /stock-value/purchase-price
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ sku: string, price: float }`
+- **Response:** `{ ok: true }`
+- **Note:** Upserts `stock_purchase_prices` for the current brand's SKU
 
 ---
 

@@ -148,6 +148,18 @@
 
 ---
 
+### `stock_purchase_prices` *(added migration 0012)*
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | Integer | PK, index |
+| brand_id | Integer | FK → brands.id, not null, index |
+| sku | String(64) | not null |
+| purchase_price | Float | not null, default=0 |
+
+**Unique constraint:** `(brand_id, sku)` — named `uq_spp_brand_sku`
+
+---
+
 ### `app_settings`
 | Column | Type | Constraints |
 |--------|------|-------------|
@@ -180,6 +192,7 @@ db.query(models.AppSettings).filter(
 | 0009_cashflow_categories | alembic/versions/0009_cashflow_categories.py | cashflow_categories table |
 | 0010_fix_cashflow_month_unique | alembic/versions/0010_fix_cashflow_month_unique.py | replace global UNIQUE(name) on cashflow_months with UNIQUE(name, brand_id) |
 | 0011_add_indexes | alembic/versions/0011_add_indexes.py | 7 indexes: brand_id on cashflow_months/bosta_reports/cashflow_categories/products/users; bosta_reports.uploaded_at; cashflow_entries.created_at |
+| 0012_stock_purchase_prices | alembic/versions/0012_stock_purchase_prices.py | stock_purchase_prices table (brand_id, sku, purchase_price); unique on (brand_id, sku) |
 
 **Run migrations (from project root with .env set):**
 ```bash
