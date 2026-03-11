@@ -238,6 +238,37 @@ def admin_overview(_admin: models.User = Depends(require_admin)):
         return result
 
 
+@app.get("/admin/brand-settings", tags=["admin"])
+def admin_brand_settings(_admin: models.User = Depends(require_admin)):
+    """Returns Bosta credentials for all brands that have bosta_email configured.
+    Used by the daily automation script to loop brands without manual brand selection."""
+    KEYS = ("bosta_email", "bosta_password", "bosta_api_key")
+    with get_db() as db:
+        brands = db.query(models.Brand).order_by(models.Brand.id).all()
+        settings_rows = db.query(models.AppSettings).filter(
+            models.AppSettings.key.in_(KEYS)
+        ).all()
+
+    # Build {brand_id: {key: value}} map
+    settings_map: dict[int, dict] = {}
+    for row in settings_rows:
+        settings_map.setdefault(row.brand_id, {})[row.key] = row.value or ""
+
+    result = []
+    for brand in brands:
+        cfg = settings_map.get(brand.id, {})
+        if not cfg.get("bosta_email"):
+            continue  # skip brands with no Bosta credentials configured
+        result.append({
+            "brand_id":       brand.id,
+            "brand_name":     brand.name,
+            "bosta_email":    cfg.get("bosta_email", ""),
+            "bosta_password": cfg.get("bosta_password", ""),
+            "bosta_api_key":  cfg.get("bosta_api_key", ""),
+        })
+    return result
+
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def get_products_map(db: Session, brand_id: int) -> dict:
