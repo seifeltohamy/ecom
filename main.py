@@ -1071,20 +1071,67 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach Bosta API: {str(e)}")
 
+    # Load saved purchase prices for this brand
+    with get_db() as db:
+        pp_rows = db.query(models.StockPurchasePrice).filter(
+            models.StockPurchasePrice.brand_id == brand_id
+        ).all()
+    purchase_map = {r.sku: r.purchase_price for r in pp_rows}
+
     rows = []
     for p in products:
-        sku      = p.get("product_code") or str(p.get("id", ""))
-        name     = p.get("name") or "Unknown"
-        price    = p.get("list_price") or 0
-        on_hand  = p.get("qty_available") or 0
-        reserved = p.get("virtual_available") or 0
-        rows.append({"sku": sku, "name": name, "price": price,
-                     "on_hand": on_hand, "reserved": reserved,
-                     "stock_value": round(on_hand * price, 2)})
+        sku            = p.get("product_code") or str(p.get("id", ""))
+        name           = p.get("name") or "Unknown"
+        consumer_price = p.get("list_price") or 0
+        on_hand        = p.get("qty_available") or 0
+        reserved       = p.get("virtual_available") or 0
+        purchase_price = purchase_map.get(sku, 0)
+        rows.append({
+            "sku":            sku,
+            "name":           name,
+            "consumer_price": consumer_price,
+            "purchase_price": purchase_price,
+            "on_hand":        on_hand,
+            "reserved":       reserved,
+            "consumer_value": round(on_hand * consumer_price, 2),
+            "purchase_value": round(on_hand * purchase_price, 2),
+        })
 
-    total_onhand = sum(r["on_hand"] for r in rows)
-    total_value  = round(sum(r["stock_value"] for r in rows), 2)
-    return {"rows": rows, "total_onhand": total_onhand, "total_value": total_value}
+    total_onhand         = sum(r["on_hand"] for r in rows)
+    total_consumer_value = round(sum(r["consumer_value"] for r in rows), 2)
+    total_purchase_value = round(sum(r["purchase_value"] for r in rows), 2)
+    return {
+        "rows": rows,
+        "total_onhand": total_onhand,
+        "total_consumer_value": total_consumer_value,
+        "total_purchase_value": total_purchase_value,
+    }
+
+
+class StockPurchasePriceIn(BaseModel):
+    sku:   str
+    price: float
+
+
+@app.put("/stock-value/purchase-price")
+def upsert_purchase_price(
+    body:     StockPurchasePriceIn,
+    brand_id: int = Depends(get_brand_id),
+    _user:    models.User = Depends(get_current_user),
+):
+    with get_db() as db:
+        row = db.query(models.StockPurchasePrice).filter(
+            models.StockPurchasePrice.brand_id == brand_id,
+            models.StockPurchasePrice.sku      == body.sku,
+        ).first()
+        if row:
+            row.purchase_price = body.price
+        else:
+            db.add(models.StockPurchasePrice(
+                brand_id=brand_id, sku=body.sku, purchase_price=body.price
+            ))
+        db.commit()
+    return {"ok": True}
 
 
 # ── SPA / static file serving ────────────────────────────────────────────────

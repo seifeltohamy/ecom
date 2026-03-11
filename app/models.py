@@ -133,3 +133,13 @@ class AppSettings(Base):
     key      = Column(String(64), primary_key=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), primary_key=True)
     value    = Column(Text, nullable=True)
+
+
+class StockPurchasePrice(Base):
+    __tablename__ = "stock_purchase_prices"
+    id             = Column(Integer, primary_key=True, index=True)
+    brand_id       = Column(Integer, ForeignKey("brands.id"), nullable=False)
+    sku            = Column(String(64), nullable=False)
+    purchase_price = Column(Float, nullable=False, default=0.0)
+
+    __table_args__ = (UniqueConstraint("brand_id", "sku", name="uq_spp_brand_sku"),)
