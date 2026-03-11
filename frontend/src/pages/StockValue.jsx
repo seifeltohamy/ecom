@@ -9,9 +9,18 @@ import Alert from '../components/Alert.jsx';
 
 export default function StockValue() {
   const [rows,    setRows]    = useState([]);
-  const [totals,  setTotals]  = useState({ total_qty: 0, total_value: 0 });
+  const [totals,  setTotals]  = useState({ total_onhand: 0, total_value: 0 });
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
+  const [sort,    setSort]    = useState({ key: null, dir: 'asc' });
+
+  const toggleSort = (key) => setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
+
+  const sortedRows = sort.key ? [...rows].sort((a, b) => {
+    const av = a[sort.key], bv = b[sort.key];
+    const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+    return sort.dir === 'asc' ? cmp : -cmp;
+  }) : rows;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -25,7 +34,7 @@ export default function StockValue() {
     }
     const data = await res.json();
     setRows(data.rows || []);
-    setTotals({ total_qty: data.total_qty, total_value: data.total_value });
+    setTotals({ total_onhand: data.total_onhand, total_value: data.total_value });
     setLoading(false);
   }, []);
 
@@ -81,15 +90,22 @@ export default function StockValue() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={thLeft}>SKU</th>
-                  <th style={thLeft}>Product Name</th>
-                  <th style={thStyle}>Qty</th>
-                  <th style={thStyle}>Price (EGP)</th>
-                  <th style={{ ...thStyle, color: 'var(--accent)' }}>Stock Value (EGP)</th>
+                  {[
+                    { key: 'sku',         label: 'SKU',             style: thLeft },
+                    { key: 'name',        label: 'Product Name',    style: thLeft },
+                    { key: 'on_hand',     label: 'On Hand',         style: thStyle },
+                    { key: 'reserved',    label: 'Reserved',        style: thStyle },
+                    { key: 'price',       label: 'Price (EGP)',     style: thStyle },
+                    { key: 'stock_value', label: 'Stock Value (EGP)', style: { ...thStyle, color: 'var(--accent)' } },
+                  ].map(({ key, label, style }) => (
+                    <th key={key} style={{ ...style, cursor: 'pointer', userSelect: 'none' }} onClick={() => toggleSort(key)}>
+                      {label} {sort.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : '↕'}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => (
+                {sortedRows.map((row, i) => (
                   <tr key={`${row.sku}-${i}`}
                       style={{ transition: 'background .1s' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'}
@@ -101,7 +117,10 @@ export default function StockValue() {
                       {row.name}
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--text)' }}>
-                      {fmtN(row.qty)}
+                      {fmtN(row.on_hand)}
+                    </td>
+                    <td style={{ ...tdStyle, color: 'var(--muted)' }}>
+                      {fmtN(row.reserved)}
                     </td>
                     <td style={{ ...tdStyle, color: 'var(--text)' }}>
                       {fmt(row.price)}
@@ -115,7 +134,8 @@ export default function StockValue() {
               <tfoot>
                 <tr style={{ background: 'rgba(249,115,22,.06)' }}>
                   <td style={{ ...tdLeft, fontWeight: 700, color: '#fafafa' }} colSpan={2}>Total</td>
-                  <td style={{ ...tdStyle, fontWeight: 700 }}>{fmtN(totals.total_qty)}</td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{fmtN(totals.total_onhand)}</td>
+                  <td style={tdStyle} />
                   <td style={tdStyle} />
                   <td style={{ ...tdStyle, fontWeight: 700, color: 'var(--accent)' }}>{fmt(totals.total_value)}</td>
                 </tr>
@@ -131,7 +151,7 @@ export default function StockValue() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             {[
               { label: 'Total SKUs',       value: fmtN(rows.length) },
-              { label: 'Total Units',      value: fmtN(totals.total_qty) },
+              { label: 'Total On Hand',    value: fmtN(totals.total_onhand) },
               { label: 'Total Stock Value', value: fmt(totals.total_value), accent: true },
             ].map(({ label, value, accent }) => (
               <div key={label} style={{

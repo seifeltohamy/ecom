@@ -15,6 +15,8 @@ import ProductsSold from './pages/ProductsSold.jsx';
 import StockValue   from './pages/StockValue.jsx';
 import Settings     from './pages/Settings.jsx';
 import Users        from './pages/Users.jsx';
+import Categories   from './pages/Categories.jsx';
+import AdminPortal  from './pages/AdminPortal.jsx';
 
 const pageMeta = {
   '/':           { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
@@ -24,8 +26,10 @@ const pageMeta = {
   '/products':       { title: 'Products',        subtitle: 'Maintain your SKU name list for reports.' },
   '/products-sold':  { title: 'Products Sold',   subtitle: 'Monthly performance by product with profit tracking.' },
   '/stock-value':    { title: 'Stock Value',     subtitle: 'Live inventory from Bosta — current stock value by product.' },
+  '/categories':     { title: 'Categories',       subtitle: 'Manage money in and money out categories for your brand.' },
   '/settings':       { title: 'Settings',        subtitle: 'Configure integrations and API keys.' },
   '/users':          { title: 'User Management', subtitle: 'Create and manage user accounts.' },
+  '/admin':          { title: 'Admin Overview',  subtitle: 'Numbers across all brands.' },
 };
 
 function SwitchBrandButton({ close }) {
@@ -144,6 +148,7 @@ function Layout() {
           <NavLink to="/products-sold"  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products Sold</NavLink>
           <NavLink to="/stock-value"    style={({ isActive }) => S.navItem(isActive)} onClick={close}>Stock Value</NavLink>
           <NavLink to="/products"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>
+          <NavLink to="/categories"     style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>
           {userRole === 'admin' && (
             <NavLink to="/users"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
           )}
@@ -173,8 +178,10 @@ function Layout() {
 
 function ProtectedRoute() {
   const { token, userRole, brandId } = useAuth();
+  const location = useLocation();
   if (!token) return <Navigate to="/login" replace />;
-  if (userRole === 'admin' && brandId === null) return <Navigate to="/select-brand" replace />;
+  if (userRole === 'admin' && brandId === null && location.pathname !== '/admin')
+    return <Navigate to="/select-brand" replace />;
   return <Outlet />;
 }
 
@@ -186,6 +193,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/select-brand" element={<BrandPicker />} />
           <Route element={<ProtectedRoute />}>
+            <Route path="admin" element={<AdminPortal />} />
             <Route element={<Layout />}>
               <Route index          element={<Home />} />
               <Route path="analytics"  element={<Analytics />} />
@@ -194,6 +202,7 @@ export default function App() {
               <Route path="products-sold" element={<ProductsSold />} />
               <Route path="products"     element={<Products />} />
               <Route path="stock-value"  element={<StockValue />} />
+              <Route path="categories"   element={<Categories />} />
               <Route path="settings"     element={<Settings />} />
               <Route path="users"        element={<Users />} />
             </Route>

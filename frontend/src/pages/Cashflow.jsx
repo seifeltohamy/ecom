@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authFetch } from '../utils/auth.js';
 import { fmt } from '../utils/format.js';
-import { moneyInCategories, moneyOutCategories } from '../utils/constants.js';
 import { S } from '../styles.js';
 import Card, { CardTitle } from '../components/Card.jsx';
 import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
 
 export default function Cashflow() {
+  const navigate = useNavigate();
   const defaultMonth = new Date().toLocaleString('en-GB', { month: 'short', year: 'numeric' });
   const [months,      setMonths]      = useState([]);
   const [activeMonth, setActiveMonth] = useState(defaultMonth);
@@ -24,22 +25,26 @@ export default function Cashflow() {
   const [editRow,     setEditRow]     = useState(null);
   const [search,      setSearch]      = useState('');
   const [loading,     setLoading]     = useState(true);
+  const [allCats,     setAllCats]     = useState([]);
 
   const loadMonths = useCallback(async () => {
-    const res  = await authFetch('/cashflow/months');
-    const data = await res.json();
-    if (data.length === 0) {
-      await authFetch('/cashflow/months', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: defaultMonth })
-      });
-      setMonths([defaultMonth]);
-      setActiveMonth(defaultMonth);
-      return;
-    }
-    setMonths(data);
-    if (!data.includes(activeMonth)) setActiveMonth(data[data.length - 1]);
+    try {
+      const res  = await authFetch('/cashflow/months');
+      const data = await res.json();
+      if (!Array.isArray(data)) return;
+      if (data.length === 0) {
+        await authFetch('/cashflow/months', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ month: defaultMonth })
+        });
+        setMonths([defaultMonth]);
+        setActiveMonth(defaultMonth);
+        return;
+      }
+      setMonths(data);
+      if (!data.includes(activeMonth)) setActiveMonth(data[data.length - 1]);
+    } catch { /* ignore */ }
   }, [defaultMonth]);
 
   const loadRows = useCallback(async (month) => {
@@ -53,6 +58,9 @@ export default function Cashflow() {
 
   useEffect(() => { loadMonths(); }, [loadMonths]);
   useEffect(() => { loadRows(activeMonth); }, [activeMonth, loadRows]);
+  useEffect(() => {
+    authFetch('/categories').then(r => r.json()).then(data => { if (Array.isArray(data)) setAllCats(data); });
+  }, []);
 
   const reset = () => {
     setDate(''); setType('in'); setAmount(''); setCategory(''); setNotes(''); setError('');
@@ -74,33 +82,39 @@ export default function Cashflow() {
     if (!amount || Number(amount) <= 0) return setError('Amount must be greater than zero.');
     if (!category) return setError('Category is required.');
 
-    if (editRow) {
-      const res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries/${editRow.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: date || editRow.date, type, amount: Number(amount), category, notes: notes.trim() })
-      });
-      const data = await res.json();
+    try {
+      let res, data;
+      if (editRow) {
+        res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries/${editRow.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: date || editRow.date, type, amount: Number(amount), category, notes: notes.trim() })
+        });
+      } else {
+        const today = new Date();
+        const autoDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' });
+        res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: Date.now(), date: autoDate, type, amount: Number(amount), category, notes: notes.trim() })
+        });
+      }
+      data = await res.json();
+      if (!res.ok) return setError(data.detail || 'Failed to save entry.');
       if (data.rows) setRows(data.rows);
-    } else {
-      const today = new Date();
-      const autoDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' });
-      const res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: Date.now(), date: autoDate, type, amount: Number(amount), category, notes: notes.trim() })
-      });
-      const data = await res.json();
-      if (data.rows) setRows(data.rows);
+      reset();
+      setOpen(false);
+    } catch {
+      setError('Network error — please try again.');
     }
-    reset();
-    setOpen(false);
   };
 
   const deleteRow = async (row) => {
-    const res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries/${row.id}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (data.rows) setRows(data.rows);
+    try {
+      const res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries/${row.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.rows) setRows(data.rows);
+    } catch { /* ignore */ }
   };
 
   const addMonth = async (month) => {
@@ -114,7 +128,7 @@ export default function Cashflow() {
     setActiveMonth(month);
   };
 
-  const categories = type === 'in' ? moneyInCategories : moneyOutCategories;
+  const categories = allCats.filter(c => c.type === type).map(c => c.name);
 
   const thStyle = {
     padding: '.7rem .85rem',
@@ -254,12 +268,25 @@ export default function Cashflow() {
               </div>
 
               <div style={{ display: 'grid', gap: '.4rem' }}>
-                <label style={{ fontSize: '.7rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--muted)' }}>Category</label>
-                <select value={category} onChange={e => setCategory(e.target.value)}
-                  style={{ padding: '.55rem .7rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface2)', color: 'var(--text)' }}>
-                  <option value="">Select category</option>
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <label style={{ fontSize: '.7rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--muted)' }}>
+                  Category
+                  {categories.length === 0 && (
+                    <span style={{ marginLeft: '.4rem', color: 'var(--muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+                      — <span onClick={() => { reset(); setOpen(false); navigate('/categories'); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>set up categories</span> or type one below
+                    </span>
+                  )}
+                </label>
+                {categories.length > 0 ? (
+                  <select value={category} onChange={e => setCategory(e.target.value)}
+                    style={{ padding: '.55rem .7rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface2)', color: 'var(--text)' }}>
+                    <option value="">Select category</option>
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                ) : (
+                  <input value={category} onChange={e => setCategory(e.target.value)}
+                    placeholder={type === 'in' ? 'e.g. Kashier, Bosta, Instapay…' : 'e.g. Ads, Salary...'}
+                    style={{ padding: '.55rem .7rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface2)', color: 'var(--text)' }} />
+                )}
               </div>
 
               <div style={{ display: 'grid', gap: '.4rem' }}>

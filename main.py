@@ -163,6 +163,81 @@ def clear_brand(current_user: models.User = Depends(require_admin)):
     return {"access_token": token}
 
 
+# ── Admin overview ─────────────────────────────────────────────────────────────
+
+@app.get("/admin/overview", tags=["admin"])
+def admin_overview(_admin: models.User = Depends(require_admin)):
+    """Cross-brand KPI summary for the admin portal. No brand_id required."""
+    from datetime import date
+    from sqlalchemy import func
+
+    now = date.today()
+    current_month_name = now.strftime("%b %Y")  # e.g. "Mar 2026"
+
+    with get_db() as db:
+        brands = db.query(models.Brand).order_by(models.Brand.created_at).all()
+        result = []
+        for brand in brands:
+            bid = brand.id
+
+            users_count = db.query(func.count(models.User.id)).filter(
+                models.User.brand_id == bid
+            ).scalar() or 0
+
+            products_count = db.query(func.count(models.Product.sku)).filter(
+                models.Product.brand_id == bid
+            ).scalar() or 0
+
+            cashflow_months_count = db.query(func.count(models.CashflowMonth.id)).filter(
+                models.CashflowMonth.brand_id == bid
+            ).scalar() or 0
+
+            cashflow_entries_total = db.query(func.count(models.CashflowEntry.id)).join(
+                models.CashflowMonth, models.CashflowEntry.month_id == models.CashflowMonth.id
+            ).filter(models.CashflowMonth.brand_id == bid).scalar() or 0
+
+            # Current month cashflow
+            current_month_in = 0.0
+            current_month_out = 0.0
+            cur_month = db.query(models.CashflowMonth).filter(
+                models.CashflowMonth.brand_id == bid,
+                models.CashflowMonth.name == current_month_name,
+            ).first()
+            if cur_month:
+                rows = db.query(models.CashflowEntry).filter(
+                    models.CashflowEntry.month_id == cur_month.id
+                ).all()
+                for row in rows:
+                    if row.type == "in":
+                        current_month_in += row.amount
+                    else:
+                        current_month_out += row.amount
+
+            bosta_reports_count = db.query(func.count(models.BostaReport.id)).filter(
+                models.BostaReport.brand_id == bid
+            ).scalar() or 0
+
+            last_report = db.query(models.BostaReport).filter(
+                models.BostaReport.brand_id == bid
+            ).order_by(models.BostaReport.uploaded_at.desc()).first()
+            last_report_date = last_report.uploaded_at.strftime("%b %Y") if last_report else None
+
+            result.append({
+                "brand_id": bid,
+                "brand_name": brand.name,
+                "users_count": users_count,
+                "products_count": products_count,
+                "cashflow_months_count": cashflow_months_count,
+                "cashflow_entries_total": cashflow_entries_total,
+                "current_month_in": current_month_in,
+                "current_month_out": current_month_out,
+                "current_month_net": current_month_in - current_month_out,
+                "bosta_reports_count": bosta_reports_count,
+                "last_report_date": last_report_date,
+            })
+        return result
+
+
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def get_products_map(db: Session, brand_id: int) -> dict:
@@ -515,6 +590,94 @@ def update_cashflow_entry(month: str, entry_id: int, entry: schemas.CashflowEntr
         ]}
 
 
+# ── Cashflow categories ───────────────────────────────────────────────────────
+
+@app.get("/categories")
+def list_categories(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        cats = db.query(models.CashflowCategory).filter(
+            models.CashflowCategory.brand_id == brand_id
+        ).order_by(models.CashflowCategory.type, models.CashflowCategory.sort_order, models.CashflowCategory.name).all()
+        return [{"id": c.id, "type": c.type, "name": c.name, "sort_order": c.sort_order} for c in cats]
+
+
+class CategoryIn(BaseModel):
+    type: str   # 'in' | 'out'
+    name: str
+
+class CategoryReorder(BaseModel):
+    ids: list[int]  # ordered list of category ids for one type
+
+
+@app.post("/categories")
+def create_category(payload: CategoryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    if payload.type not in ("in", "out"):
+        raise HTTPException(status_code=400, detail="type must be 'in' or 'out'")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    with get_db() as db:
+        existing = db.query(models.CashflowCategory).filter(
+            models.CashflowCategory.brand_id == brand_id,
+            models.CashflowCategory.type == payload.type,
+            models.CashflowCategory.name == name,
+        ).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Category already exists")
+        max_order = db.query(models.CashflowCategory).filter(
+            models.CashflowCategory.brand_id == brand_id,
+            models.CashflowCategory.type == payload.type,
+        ).count()
+        cat = models.CashflowCategory(brand_id=brand_id, type=payload.type, name=name, sort_order=max_order)
+        db.add(cat)
+        db.commit()
+        return {"id": cat.id, "type": cat.type, "name": cat.name, "sort_order": cat.sort_order}
+
+
+@app.put("/categories/{cat_id}")
+def rename_category(cat_id: int, payload: CategoryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    with get_db() as db:
+        cat = db.query(models.CashflowCategory).filter(
+            models.CashflowCategory.id == cat_id,
+            models.CashflowCategory.brand_id == brand_id,
+        ).first()
+        if not cat:
+            raise HTTPException(status_code=404, detail="Category not found")
+        cat.name = name
+        db.commit()
+        return {"id": cat.id, "type": cat.type, "name": cat.name, "sort_order": cat.sort_order}
+
+
+@app.delete("/categories/{cat_id}")
+def delete_category(cat_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        cat = db.query(models.CashflowCategory).filter(
+            models.CashflowCategory.id == cat_id,
+            models.CashflowCategory.brand_id == brand_id,
+        ).first()
+        if not cat:
+            raise HTTPException(status_code=404, detail="Category not found")
+        db.delete(cat)
+        db.commit()
+    return {"ok": True}
+
+
+@app.put("/categories/reorder/{type}")
+def reorder_categories(type: str, payload: CategoryReorder, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        for order, cat_id in enumerate(payload.ids):
+            db.query(models.CashflowCategory).filter(
+                models.CashflowCategory.id == cat_id,
+                models.CashflowCategory.brand_id == brand_id,
+                models.CashflowCategory.type == type,
+            ).update({"sort_order": order})
+        db.commit()
+    return {"ok": True}
+
+
 # ── Bosta report history ──────────────────────────────────────────────────────
 
 @app.get("/reports")
@@ -546,6 +709,7 @@ def get_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: mod
         if not r:
             raise HTTPException(status_code=404, detail="Report not found.")
         return {
+            "report_id": r.id,
             "id": r.id,
             "uploaded_at": r.uploaded_at.isoformat(),
             "date_from": r.date_from,
@@ -555,6 +719,74 @@ def get_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: mod
             "grand_revenue": r.grand_revenue,
             "rows": json.loads(r.rows_json),
         }
+
+
+@app.get("/reports/{report_id}/pl")
+def get_report_pl(report_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        r = db.query(models.BostaReport).filter(
+            models.BostaReport.id == report_id, models.BostaReport.brand_id == brand_id
+        ).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Report not found.")
+        items = db.query(models.BostaReportPl).filter(
+            models.BostaReportPl.report_id == report_id
+        ).all()
+        return {
+            "ads_spent": r.ads_spent,
+            "items": [
+                {
+                    "sku": i.sku, "price": i.price,
+                    "cost": i.cost, "extra_cost": i.extra_cost,
+                    "cost_formula": i.cost_formula, "extra_cost_formula": i.extra_cost_formula,
+                }
+                for i in items
+            ],
+        }
+
+
+class ReportPlItem(BaseModel):
+    sku:                str
+    price:              float | None = None
+    cost:               float | None = None
+    extra_cost:         float | None = None
+    cost_formula:       str   | None = None
+    extra_cost_formula: str   | None = None
+
+class ReportPlPayload(BaseModel):
+    ads_spent: float | None = None
+    items:     list[ReportPlItem] = []
+
+
+@app.put("/reports/{report_id}/pl")
+def save_report_pl(report_id: int, payload: ReportPlPayload, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        r = db.query(models.BostaReport).filter(
+            models.BostaReport.id == report_id, models.BostaReport.brand_id == brand_id
+        ).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Report not found.")
+        r.ads_spent = payload.ads_spent
+        # Upsert per-SKU rows
+        for item in payload.items:
+            row = db.query(models.BostaReportPl).filter(
+                models.BostaReportPl.report_id == report_id,
+                models.BostaReportPl.sku == item.sku,
+            ).first()
+            if row:
+                row.price              = item.price
+                row.cost               = item.cost
+                row.extra_cost         = item.extra_cost
+                row.cost_formula       = item.cost_formula
+                row.extra_cost_formula = item.extra_cost_formula
+            else:
+                db.add(models.BostaReportPl(
+                    report_id=report_id, sku=item.sku,
+                    price=item.price, cost=item.cost, extra_cost=item.extra_cost,
+                    cost_formula=item.cost_formula, extra_cost_formula=item.extra_cost_formula,
+                ))
+        db.commit()
+    return {"ok": True}
 
 
 # ── Dashboard summary ─────────────────────────────────────────────────────────
@@ -813,26 +1045,37 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
         raise HTTPException(status_code=400, detail="Bosta API key not configured. Go to Settings to add it.")
 
     try:
-        resp = httpx.request(
-            "GET",
-            "http://app.bosta.co/api/v2/products/list",
-            headers={"authorization": api_key, "Content-Type": "application/json"},
-            json={"isActiveProducts": True, "isActiveProductVariants": True},
-            timeout=15,
-            follow_redirects=True,
-        )
+        h = {"Authorization": api_key}
+        # Step 1: fetch all products (paginated)
+        products = []
+        page = 0
+        page_size = 100
+        while True:
+            resp = httpx.get(
+                "http://app.bosta.co/api/v2/products",
+                headers=h,
+                params={"pageNumber": page, "pageSize": page_size},
+                timeout=15,
+                follow_redirects=True,
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Bosta API returned {resp.status_code}: {resp.text[:500]}")
+            batch = resp.json().get("data", {}).get("products", [])
+            products.extend(batch)
+            if len(batch) < page_size:
+                break
+            page += 1
+
+        # Step 2: fetch every product individually to get bostaSku + productsVariances
+        for i, p in enumerate(products):
+            r = httpx.get(f"http://app.bosta.co/api/v2/products/{p['id']}", headers=h, timeout=15, follow_redirects=True)
+            if r.status_code == 200:
+                products[i] = r.json().get("data", p)
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Could not reach Bosta API: {str(e)}")
-
-    if resp.status_code != 200:
-        try:
-            body = resp.json()
-            msg = body.get("message") or body.get("error") or resp.text[:300]
-        except Exception:
-            msg = resp.text[:300]
-        raise HTTPException(status_code=502, detail=f"Bosta API returned {resp.status_code}: {msg}")
-
-    products = resp.json().get("data", {}).get("products", [])
     rows = []
 
     for p in products:
@@ -842,26 +1085,27 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
 
         if variants:
             for v in variants:
-                sku = v.get("referenceId") or p.get("referenceId")
-                if not sku:
-                    continue
-                qty   = v.get("variantQuantity") or 0
-                price = v.get("variantPrice") or p_price
-                opt   = (v.get("optionsString") or "").strip()
-                name  = f"{p_name} – {opt}" if opt else p_name
-                rows.append({"sku": sku, "name": name, "qty": qty, "price": price,
-                             "stock_value": round(qty * price, 2)})
+                sku      = v.get("bostaSku") or str(v.get("id", ""))
+                opt      = (v.get("optionsString") or "").strip()
+                # For single-variant (default created), don't append option to name
+                name     = f"{p_name} - {opt}" if opt and not v.get("defaultCreated") else p_name
+                price    = v.get("variantPrice") or p_price
+                on_hand  = v.get("variantQuantity") or 0
+                reserved = v.get("reservedQuantity") or 0
+                rows.append({"sku": sku, "name": name, "price": price,
+                             "on_hand": on_hand, "reserved": reserved,
+                             "stock_value": round(on_hand * price, 2)})
         else:
-            sku = p.get("referenceId")
-            if not sku:
-                continue
-            qty = p.get("quantity") or 0
-            rows.append({"sku": sku, "name": p_name, "qty": qty, "price": p_price,
-                         "stock_value": round(qty * p_price, 2)})
+            sku      = p.get("bostaSku") or str(p.get("id", ""))
+            on_hand  = p.get("quantity") or 0
+            reserved = p.get("reservedQuantity") or 0
+            rows.append({"sku": sku, "name": p_name, "price": p_price,
+                         "on_hand": on_hand, "reserved": reserved,
+                         "stock_value": round(on_hand * p_price, 2)})
 
-    total_qty   = sum(r["qty"] for r in rows)
-    total_value = round(sum(r["stock_value"] for r in rows), 2)
-    return {"rows": rows, "total_qty": total_qty, "total_value": total_value}
+    total_onhand = sum(r["on_hand"] for r in rows)
+    total_value  = round(sum(r["stock_value"] for r in rows), 2)
+    return {"rows": rows, "total_onhand": total_onhand, "total_value": total_value}
 
 
 # ── SPA / static file serving ────────────────────────────────────────────────

@@ -38,6 +38,26 @@
 
 ---
 
+---
+
+## Admin (Admin Only, No Brand Required)
+
+### GET /admin/overview
+- **Auth:** Bearer + require_admin (no brand_id needed)
+- **Response:** array of brand KPI objects:
+  ```json
+  [{
+    "brand_id": 1, "brand_name": "Zen",
+    "users_count": 3, "products_count": 15,
+    "cashflow_months_count": 1, "cashflow_entries_total": 32,
+    "current_month_in": 50000.0, "current_month_out": 20000.0, "current_month_net": 30000.0,
+    "bosta_reports_count": 5, "last_report_date": "Mar 2026"
+  }]
+  ```
+- **Note:** `current_month_*` is for the current calendar month (e.g. "Mar 2026"). `last_report_date` is nullable.
+
+---
+
 ## Brands (Admin Only, No Brand Required)
 
 ### GET /brands

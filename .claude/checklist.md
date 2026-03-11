@@ -25,6 +25,12 @@
 - [x] **Multi-tenant brands** — brands table, brand_id FK on all tables, JWT-based isolation, BrandPicker UI, Switch Brand
 - [x] **EcomHQ rebrand** — renamed from "Zen Finance"; login page redesigned with two-column hero+form layout
 - [x] **Auth race fix** — login() decodes JWT synchronously so ProtectedRoute sees brandId before /auth/me resolves
+- [x] **P&L Excel-style formulas** — click-to-reference (type `=` → Price/Qty/Revenue cells glow → click inserts variable), fill-drag propagates formula string, each row evaluates independently, autosave with 1.5s debounce, formula strings persisted in DB
+- [x] **Categories page** — `/categories`; each brand manages Money In / Money Out cashflow categories in DB; "Load defaults" button seeds Kashier/Bosta/Instapay for Money In
+- [x] **Cashflow DB-backed categories** — Cashflow page fetches `/categories` instead of hardcoded list; free-text fallback when no categories configured
+- [x] **Multi-tenant cashflow fix** — Migration 0010 replaced global `UNIQUE(name)` on `cashflow_months` with per-brand `UNIQUE(name, brand_id)`; added `res.ok` checks + error display in Cashflow.jsx submit/delete
+- [x] **DB indexes** — Migration 0011 adds 7 indexes on `brand_id` columns + `bosta_reports.uploaded_at` + `cashflow_entries.created_at`
+- [x] **Admin Overview Portal** — `/admin` route (no sidebar), `GET /admin/overview` endpoint, cross-brand KPI table, "View Overview →" from brand picker
 
 ## In Progress
 

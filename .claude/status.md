@@ -93,5 +93,14 @@ DATABASE_URL=postgresql://user:pass@host/dbname
 - Always use `authFetch()` from `utils/auth.js` — never raw `fetch()` for API calls
 - It injects the Bearer token automatically
 
+### Bosta Products API
+- List: `GET /api/v2/products?pageNumber=0&pageSize=100` — paginate until batch < pageSize
+- Detail: `GET /api/v2/products/{id}` — returns `productsVariances` with `bostaSku`, `variantQuantity`, `reservedQuantity`
+- Auth: `Authorization: <api_key>` — raw key, NO Bearer prefix
+- Do NOT use `/products/list` — returns 400 errorCode 16000
+- Non-variant products lack `bostaSku` in the list response — must fetch individually to get correct BO-XXXXXX SKU
+- `variantQuantity` ≠ Bosta dashboard "Onhand Quantity" (API limitation; `totalOnhand` field returns 0 for all variants)
+- Vite proxy routes (`/stock-value`, `/settings`, `/products-sold`) need `bypass` to avoid returning API JSON on browser navigation
+
 ### Port 8080
 - Use `python -m uvicorn` not bare `uvicorn` to avoid PATH issues on Windows

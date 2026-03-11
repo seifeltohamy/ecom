@@ -85,6 +85,25 @@ export default function BrandPicker() {
           </p>
         </div>
 
+        {/* Admin overview link */}
+        {userRole === 'admin' && (
+          <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+            <button
+              onClick={() => navigate('/admin')}
+              style={{
+                background: 'none', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)', color: 'var(--muted)',
+                fontSize: '.82rem', cursor: 'pointer', padding: '.4rem .85rem',
+                transition: 'border-color .15s, color .15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)'; }}
+            >
+              View Overview →
+            </button>
+          </div>
+        )}
+
         {/* Brand list */}
         <div style={{
           background: 'var(--surface)', border: '1px solid var(--border)',

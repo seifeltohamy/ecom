@@ -88,6 +88,30 @@ class BostaReport(Base):
     grand_revenue  = Column(Float,    nullable=False, default=0.0)
     rows_json      = Column(Text,     nullable=False, default="[]")
     brand_id       = Column(Integer, ForeignKey("brands.id"), nullable=False)
+    ads_spent      = Column(Float, nullable=True)
+
+
+class BostaReportPl(Base):
+    __tablename__ = "bosta_report_pl"
+    report_id          = Column(Integer, ForeignKey("bosta_reports.id", ondelete="CASCADE"), primary_key=True)
+    sku                = Column(String(64), primary_key=True)
+    price              = Column(Float, nullable=True)
+    cost               = Column(Float, nullable=True)
+    extra_cost         = Column(Float, nullable=True)
+    cost_formula       = Column(Text, nullable=True)
+    extra_cost_formula = Column(Text, nullable=True)
+
+
+class CashflowCategory(Base):
+    __tablename__ = "cashflow_categories"
+    id         = Column(Integer, primary_key=True, index=True)
+    brand_id   = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    type       = Column(String(8),   nullable=False)    # 'in' | 'out'
+    name       = Column(String(128), nullable=False)
+    sort_order = Column(Integer,     nullable=False, default=0)
+    created_at = Column(DateTime,    default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("brand_id", "type", "name", name="uq_cat_brand_type_name"),)
 
 
 class ProductsSoldManual(Base):

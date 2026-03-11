@@ -101,6 +101,34 @@
 | grand_revenue | Float | not null, default=0.0 |
 | rows_json | Text | not null, default="[]" — JSON-encoded rows array |
 | brand_id | Integer | FK → brands.id, not null |
+| ads_spent | Float | nullable — saved from P&L ads input |
+
+---
+
+### `bosta_report_pl` *(added migration 0007, extended 0008)*
+| Column | Type | Constraints |
+|--------|------|-------------|
+| report_id | Integer | **composite PK**, FK → bosta_reports.id (CASCADE) |
+| sku | String(64) | **composite PK** |
+| price | Float | nullable |
+| cost | Float | nullable — computed float from formula |
+| extra_cost | Float | nullable — computed float from formula |
+| cost_formula | Text | nullable — raw formula string e.g. `=price*0.25` |
+| extra_cost_formula | Text | nullable — raw formula string |
+
+---
+
+### `cashflow_categories` *(added migration 0009)*
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | Integer | PK, index |
+| brand_id | Integer | FK → brands.id (CASCADE), not null |
+| type | String(8) | not null — `'in'` or `'out'` |
+| name | String(128) | not null |
+| sort_order | Integer | not null, default=0 |
+| created_at | DateTime | not null, default=utcnow |
+
+**Unique constraint:** `(brand_id, type, name)` — named `uq_cat_brand_type_name`
 
 ---
 
@@ -147,6 +175,11 @@ db.query(models.AppSettings).filter(
 | 0004_products_sold | alembic/versions/0004_products_sold.py | products_sold_manual table |
 | 0005_app_settings | alembic/versions/0005_app_settings.py | app_settings key-value table |
 | 0006_multi_tenant | alembic/versions/0006_multi_tenant.py | brands table + brand_id on all business tables |
+| 0007_report_pl | alembic/versions/0007_report_pl.py | bosta_report_pl table + bosta_reports.ads_spent column |
+| 0008_pl_formulas | alembic/versions/0008_pl_formulas.py | cost_formula + extra_cost_formula TEXT on bosta_report_pl |
+| 0009_cashflow_categories | alembic/versions/0009_cashflow_categories.py | cashflow_categories table |
+| 0010_fix_cashflow_month_unique | alembic/versions/0010_fix_cashflow_month_unique.py | replace global UNIQUE(name) on cashflow_months with UNIQUE(name, brand_id) |
+| 0011_add_indexes | alembic/versions/0011_add_indexes.py | 7 indexes: brand_id on cashflow_months/bosta_reports/cashflow_categories/products/users; bosta_reports.uploaded_at; cashflow_entries.created_at |
 
 **Run migrations (from project root with .env set):**
 ```bash
