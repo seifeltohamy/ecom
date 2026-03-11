@@ -24,6 +24,7 @@ export default function Cashflow() {
   const [confirmRow,  setConfirmRow]  = useState(null);
   const [editRow,     setEditRow]     = useState(null);
   const [search,      setSearch]      = useState('');
+  const [durFilter,   setDurFilter]   = useState('all');
   const [loading,     setLoading]     = useState(true);
   const [allCats,     setAllCats]     = useState([]);
 
@@ -164,54 +165,86 @@ export default function Cashflow() {
       {loading && <Alert type="loading">Loading cashflow…</Alert>}
 
       {!loading && rows.length > 0 && (() => {
-        const totalIn  = rows.filter(r => r.type === 'in').reduce((s, r) => s + r.amount, 0);
-        const totalOut = rows.filter(r => r.type === 'out').reduce((s, r) => s + r.amount, 0);
+        // Compute rows with running balance (chronological), then apply duration filter
+        const allOrdered = [...rows].sort((a, b) => a.id - b.id);
+        let running = 0;
+        const withBalance = allOrdered.map(r => {
+          running += r.type === 'in' ? r.amount : -r.amount;
+          return { ...r, running };
+        });
+        const durRows = (() => {
+          if (durFilter === 'all') return withBalance;
+          const days = durFilter === '7d' ? 7 : durFilter === '14d' ? 14 : 30;
+          const cutoff = new Date(Date.now() - days * 86400000);
+          const yr = parseInt(activeMonth.split(' ')[1]);
+          return withBalance.filter(r => {
+            const [d, m] = r.date.split('/').map(Number);
+            return new Date(yr, m - 1, d) >= cutoff;
+          });
+        })();
+
+        const totalIn  = durRows.filter(r => r.type === 'in').reduce((s, r) => s + r.amount, 0);
+        const totalOut = durRows.filter(r => r.type === 'out').reduce((s, r) => s + r.amount, 0);
         const net = totalIn - totalOut;
         const cs = { flex: '1', minWidth: 150, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1rem 1.25rem', animation: 'fadeIn .3s ease' };
         const ls = { fontSize: '.68rem', textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', fontWeight: 600 };
+        const durBtnStyle = (key) => ({
+          padding: '.35rem .75rem', fontSize: '.78rem', fontWeight: 500, cursor: 'pointer',
+          borderRadius: 'var(--radius-sm)', border: '1px solid',
+          borderColor: durFilter === key ? 'var(--accent)' : 'var(--border)',
+          background:  durFilter === key ? 'var(--accent)' : 'none',
+          color:       durFilter === key ? '#fff' : 'var(--muted)',
+          transition: 'all .12s',
+        });
         return (
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-            <div style={cs}><div style={ls}>Total In</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--success)' }}>EGP {fmt(totalIn)}</div></div>
-            <div style={cs}><div style={ls}>Total Out</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(totalOut)}</div></div>
-            <div style={cs}><div style={ls}>Net</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: net >= 0 ? 'var(--success)' : 'var(--danger)' }}>EGP {fmt(net)}</div></div>
-          </div>
-        );
-      })()}
+          <>
+            {/* Duration filter */}
+            <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginBottom: '.75rem' }}>
+              {[['all','All'],['7d','Last 7 days'],['14d','Last 14 days'],['30d','Last 30 days']].map(([key, label]) => (
+                <button key={key} style={durBtnStyle(key)} onClick={() => setDurFilter(key)}>{label}</button>
+              ))}
+            </div>
+            {/* Summary cards */}
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <div style={cs}><div style={ls}>Total In</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--success)' }}>EGP {fmt(totalIn)}</div></div>
+              <div style={cs}><div style={ls}>Total Out</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(totalOut)}</div></div>
+              <div style={cs}><div style={ls}>Net</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: net >= 0 ? 'var(--success)' : 'var(--danger)' }}>EGP {fmt(net)}</div></div>
+            </div>
 
-      {!loading && <Card>
-        <CardTitle>Cashflow Table</CardTitle>
-        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem', alignItems: 'center' }}>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by category or notes…"
-            style={{ flex: 1, padding: '.5rem .8rem', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 'var(--radius-sm)', color: 'var(--text)', fontSize: '.875rem', outline: 'none' }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--muted)', padding: '.45rem .75rem', fontSize: '.82rem', cursor: 'pointer' }}>Clear</button>
-          )}
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Date</th>
-                <th style={thStyle}>Money In</th>
-                <th style={thStyle}>Money Out</th>
-                <th style={thStyle}>Reason</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Balance</th>
-                <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                const q = search.toLowerCase().trim();
-                const allOrdered = [...rows].sort((a, b) => a.id - b.id);
-                let running = 0;
-                return allOrdered
-                  .map(r => { running += (r.type === 'in' ? r.amount : -r.amount); return { ...r, running }; })
-                  .filter(r => !q || r.category.toLowerCase().includes(q) || (r.notes || '').toLowerCase().includes(q))
-                  .map(r => (
+            {/* Table */}
+            <Card>
+              <CardTitle>Cashflow Table</CardTitle>
+              <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem', alignItems: 'center' }}>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search by category or notes…"
+                  style={{ flex: 1, padding: '.5rem .8rem', background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: 'var(--radius-sm)', color: 'var(--text)', fontSize: '.875rem', outline: 'none' }}
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--muted)', padding: '.45rem .75rem', fontSize: '.82rem', cursor: 'pointer' }}>Clear</button>
+                )}
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Date</th>
+                      <th style={thStyle}>Money In</th>
+                      <th style={thStyle}>Money Out</th>
+                      <th style={thStyle}>Reason</th>
+                      <th style={{ ...thStyle, textAlign: 'right' }}>Balance</th>
+                      <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const q = search.toLowerCase().trim();
+                      // Newest first; balance already computed chronologically above
+                      return [...durRows]
+                        .reverse()
+                        .filter(r => !q || r.category.toLowerCase().includes(q) || (r.notes || '').toLowerCase().includes(q))
+                        .map(r => (
                     <tr key={r.id}>
                       <td style={tdStyle}>{r.date}</td>
                       <td style={{ ...tdStyle, color: r.type === 'in' ? 'var(--success)' : 'var(--muted)' }}>
@@ -234,12 +267,15 @@ export default function Cashflow() {
                         </div>
                       </td>
                     </tr>
-                  ));
-              })()}
-            </tbody>
-          </table>
-        </div>
-      </Card>}
+                        ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        );
+      })()}
 
       {open && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', display: 'grid', placeItems: 'center', zIndex: 200 }}>
