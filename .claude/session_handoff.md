@@ -4,6 +4,30 @@
 
 ---
 
+## Last Session — 2026-03-12 (continued)
+
+### What Was Done
+
+#### Settings page viewer access
+- `GET /settings` backend changed from `require_admin` to `get_current_user` so viewers with Settings permission can load the page (read-only view; `PUT /settings` still requires admin)
+- `App.jsx` Settings nav link changed from `userRole === 'admin'` to `canSee('/settings')` so the permission actually shows the link
+
+#### Role label rename (UI only)
+- "Viewer" → "User" in Users.jsx dropdown and role badge. DB enum value `viewer` unchanged.
+
+#### Admin users list in Admin Portal
+- **Backend** (`app/routers/auth.py`): Added `GET /admin/admins`, `PUT /admin/admins/{id}/brands`, `DELETE /admin/admins/{id}`
+- **Frontend** (`AdminPortal.jsx`): Added "Admin Users" table above Brands Overview showing Name, Email, Brand Access (inline ✎ edit with checkboxes), Created, Delete. `createAdmin` now reloads the list.
+
+#### Analytics distribution chart fixes
+- Bar width now uses `amount / totalOut * 100%` (proportional distribution) with 0.5% minimum — removed the old `Math.max(6, ...)` floor that inflated small items
+- Right column in `.zen-dist-row` widened 120px → 150px + `white-space: nowrap` to prevent "EGP 149,654.00" from wrapping
+
+#### Stock Value duplicate title removed
+- Removed the inline `<h1>Stock Value</h1>` + subtitle from `StockValue.jsx` (the page header from `pageMeta` already provides it). Refresh button kept, right-aligned.
+
+---
+
 ## Last Session — 2026-03-12
 
 ### What Was Done

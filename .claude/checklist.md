@@ -42,7 +42,10 @@
 - [x] **Stock Value — sold/sell-through/days metrics** — `GET /stock-value` now returns `units_sold`, `avg_daily_sales`, `days_remaining`, `sell_through` per row; `capital_trapped` + `report_days` in totals. Frontend shows Sold, Sell-Through%, Days Left columns with color coding; GMROI + Slow Mover Capital summary cards.
 - [x] **Dashboard trend + Bosta summary endpoints** — `GET /dashboard/trend`, `GET /dashboard/bosta-summary`, enhanced `GET /dashboard/summary` with `ytd_net` + profit fields
 - [x] **Read Only user permission** — `users.read_only` column (migration 0015); `require_writable` dep on all write endpoints; `PUT /users/{id}/readonly`; `isReadOnly` in AuthContext; toggle UI in Users.jsx
-- [x] **Settings in viewer page permissions** — `/settings` added to `PERMISSIONED_PAGES` in App.jsx so admins can grant viewers settings access
+- [x] **Settings in viewer page permissions** — `/settings` added to `PERMISSIONED_PAGES` in App.jsx so admins can grant viewers settings access; `GET /settings` backend relaxed to `get_current_user`; nav link uses `canSee()` instead of hardcoded admin check
+- [x] **Role label "User"** — "Viewer" renamed to "User" in all UI (dropdown + badge); DB enum unchanged
+- [x] **Admin users management in Admin Portal** — `GET /admin/admins`, `PUT /admin/admins/{id}/brands`, `DELETE /admin/admins/{id}`; Admin Users table in AdminPortal with inline brand access editing
+- [x] **Analytics bar chart fixes** — proportional distribution (÷ total), 0.5% min floor; right column 150px + nowrap; Stock Value duplicate title removed
 
 ## In Progress
 
