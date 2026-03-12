@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { authFetch } from '../utils/auth.js';
+import { authFetch, getToken } from '../utils/auth.js';
 import Btn from './Btn.jsx';
 import Spinner from './Spinner.jsx';
-
-function getToken() {
-  return localStorage.getItem('token');
-}
 
 const inputStyle = {
   background: 'var(--surface2, #1c1917)', color: 'var(--text)',

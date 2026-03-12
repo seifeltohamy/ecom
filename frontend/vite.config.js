@@ -20,23 +20,7 @@ export default defineConfig({
       '/debug-upload':  { target: 'http://localhost:8080', changeOrigin: true },
       '/admin':         { target: 'http://localhost:8080', changeOrigin: true, bypass: (req) => req.headers.accept?.includes('text/html') ? '/index.html' : null },
       '/sku-cost-items':{ target: 'http://localhost:8080', changeOrigin: true },
-      '/automation':    {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes, req, res) => {
-            if (req.url?.includes('/run-export')) {
-              // Flush SSE chunks immediately — Vite's proxy buffers by default
-              res.setHeader('Content-Type', 'text/event-stream');
-              res.setHeader('Cache-Control', 'no-cache');
-              res.setHeader('X-Accel-Buffering', 'no');
-              res.flushHeaders?.();
-              proxyRes.on('data', chunk => res.write(chunk));
-              proxyRes.on('end', () => res.end());
-            }
-          });
-        },
-      },
+      '/automation':    { target: 'http://localhost:8080', changeOrigin: true },
     }
   }
 })
