@@ -138,11 +138,7 @@ export default function StockValue() {
 
   return (
     <div>
-      <div style={S.header}>
-        <div>
-          <h1 style={S.h1}>Stock Value</h1>
-          <p style={S.sub}>Live inventory from Bosta — consumer &amp; purchase value per product</p>
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
         <Btn onClick={load} disabled={loading}>
           {loading ? 'Loading…' : '↺ Refresh'}
         </Btn>

@@ -115,9 +115,12 @@ body {
 /* Analytics distribution row */
 .zen-dist-row {
   display: grid;
-  grid-template-columns: 160px 1fr 120px;
+  grid-template-columns: 160px 1fr 150px;
   gap: .75rem;
   align-items: center;
+}
+.zen-dist-row > :last-child {
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {

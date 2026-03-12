@@ -121,7 +121,7 @@ export default function Analytics() {
                     <div style={{ height: 10, background: 'var(--surface2)', borderRadius: 999 }}>
                       <div style={{
                         height: '100%', borderRadius: 999,
-                        width: `${Math.max(6, (d.amount / totals.totalOut) * 100)}%`,
+                        width: `${Math.max(0.5, (d.amount / totals.totalOut) * 100)}%`,
                         background: 'linear-gradient(90deg, #f97316, #f59e0b)',
                       }} />
                     </div>
@@ -143,7 +143,7 @@ export default function Analytics() {
                     <div style={{ height: 10, background: 'var(--surface2)', borderRadius: 999 }}>
                       <div style={{
                         height: '100%', borderRadius: 999,
-                        width: `${Math.max(6, (d.amount / totals.totalIn) * 100)}%`,
+                        width: `${Math.max(0.5, (d.amount / totals.totalIn) * 100)}%`,
                         background: 'linear-gradient(90deg, #22c55e, #4ade80)',
                       }} />
                     </div>
