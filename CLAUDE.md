@@ -2,6 +2,9 @@
 
 > Auto-loaded at session start. Read this first. For details, see `.claude/` files.
 
+## Mandatory Startup Reads
+At the start of every session, you must read all files under `.claude/` plus this `CLAUDE.md` before doing any work.
+
 ## What This App Does
 Multi-brand e-commerce operations dashboard. Tracks cashflow (money in/out),
 Bosta order reports (Excel upload + API), stock inventory, and sales profitability.

@@ -4,7 +4,7 @@
 
 ## Current State
 **Fully working.** Vite + React frontend + FastAPI backend with PostgreSQL.
-Last major work: user name feature, mobile responsive layout, loading states.
+Recent work: settings view permission fix, admin users management in Admin Portal, analytics distribution bar fixes, Stock Value UI cleanup, and multiple dashboard/stock metrics enhancements.
 
 ---
 
@@ -26,7 +26,8 @@ Last major work: user name feature, mobile responsive layout, loading states.
 
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI app, all routes |
+| `main.py` | FastAPI app bootstrap + router wiring |
+| `app/routers/` | Route modules split by domain (auth, cashflow, dashboard, products, settings, bosta) |
 | `app/models.py` | SQLAlchemy models |
 | `app/schemas.py` | Pydantic request/response schemas |
 | `app/auth.py` | JWT + bcrypt helpers |

@@ -64,6 +64,25 @@
   ```
 - **Note:** `current_month_*` is for the current calendar month (e.g. "Mar 2026"). `last_report_date` is nullable.
 
+### GET /admin/admins
+- **Auth:** Bearer + require_admin (no brand_id needed)
+- **Response:** `AdminUser[]`
+  ```
+  { id, email, name, role, created_at, allowed_brand_ids, is_self }
+  ```
+- **Notes:** Only users with role `admin` are returned. `allowed_brand_ids = null` means all brands.
+
+### PUT /admin/admins/{id}/brands
+- **Auth:** Bearer + require_admin (no brand_id needed)
+- **Body:** JSON — `{ allowed_brand_ids: int[] | null }` (null = all brands)
+- **Response:** `{ ok: true }`
+- **Errors:** 404 if admin not found; 400 if trying to edit non-admin
+
+### DELETE /admin/admins/{id}
+- **Auth:** Bearer + require_admin (no brand_id needed)
+- **Response:** `{ ok: true }`
+- **Errors:** 404 if admin not found; 400 if trying to delete self
+
 ---
 
 ## Brands (Admin Only, No Brand Required)
@@ -143,7 +162,7 @@
 ## Bosta Reports *(brand-scoped)*
 
 ### POST /upload
-- **Auth:** Bearer (any role) + brand in JWT
+- **Auth:** Bearer + require_writable + brand in JWT
 - **Body:** FormData — `file` (.xlsx/.xls), `date_from` (YYYY-MM-DD, optional), `date_to` (optional)
 - **Response:** `{ rows, grand_quantity, grand_revenue, order_count, report_id }`
   Where each row: `{ sku, name, prices: [{price, quantity, total}], total_quantity, total_revenue }`
@@ -249,21 +268,22 @@
   ```
 
 ### PUT /products-sold/{month}/{sku}
-- **Auth:** Bearer (any role) + brand in JWT
+- **Auth:** Bearer + require_writable + brand in JWT
 - **Body:** JSON — `{ price, cost, extra_cost, expense }` (all nullable floats)
 - **Response:** `{ ok: true }`
 
 ---
 
-## Settings *(brand-scoped, Admin Only)*
+## Settings *(brand-scoped)*
 
 ### GET /settings
-- **Auth:** Bearer + require_admin + brand in JWT
-- **Response:** `{ bosta_api_key: string }`
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** `{ bosta_api_key, bosta_email, bosta_password, bosta_email_password }`
+- **Note:** Read-only for non-admin users.
 
 ### PUT /settings
 - **Auth:** Bearer + require_admin + brand in JWT
-- **Body:** JSON — `{ bosta_api_key: string | null }`
+- **Body:** JSON — `{ bosta_api_key: string | null, bosta_email: string | null, bosta_password: string | null, bosta_email_password: string | null }`
 - **Response:** `{ ok: true }`
 
 ---

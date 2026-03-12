@@ -1,0 +1,5 @@
+- master wallet to have the net balance at the end of the month to stay away from starting balance at cashflow
+- Salaries reminder and calculator ( media buyer - moderator)
+- integrate shopify inventory for users who dont fullfill with bosta
+- integrate meta for ads amount spent
+- gemini api for business intelligence

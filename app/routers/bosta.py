@@ -232,7 +232,7 @@ async def upload_excel(
     date_from: str = Form(None),
     date_to:   str = Form(None),
     brand_id: int = Depends(get_brand_id),
-    _user: models.User = Depends(get_current_user),
+    _user: models.User = Depends(require_writable),
 ):
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Please upload an Excel file (.xlsx or .xls).")

@@ -123,7 +123,7 @@ class ProductsSoldUpdate(BaseModel):
 @router.put("/products-sold/{month}/{sku}")
 def update_products_sold(month: str, sku: str, payload: ProductsSoldUpdate,
                          brand_id: int = Depends(get_brand_id),
-                         _user: models.User = Depends(get_current_user)):
+                         _user: models.User = Depends(require_writable)):
     with get_db() as db:
         m = db.query(models.CashflowMonth).filter(
             models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id

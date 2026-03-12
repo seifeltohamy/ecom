@@ -4,6 +4,14 @@
 
 ---
 
+## Last Session — 2026-03-12 (documentation sync)
+
+### What Was Done
+
+- Updated `.claude` docs to reflect recent UI/backend fixes: Settings permission visibility + backend read access, role label "User" display, admin users management in Admin Portal, analytics distribution bar proportional fix + nowrap, Stock Value duplicate title removal.
+
+---
+
 ## Last Session — 2026-03-12 (continued)
 
 ### What Was Done
