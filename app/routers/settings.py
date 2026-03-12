@@ -1,8 +1,9 @@
+import json
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
 import httpx
 
-from app.deps import get_db, get_current_user, require_admin, get_brand_id
+from app.deps import get_db, get_current_user, require_admin, get_brand_id, require_writable
 from app import models
 
 router = APIRouter()
@@ -16,7 +17,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("/settings")
-def get_settings(brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
+def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
         rows = db.query(models.AppSettings).filter(models.AppSettings.brand_id == brand_id).all()
         data = {r.key: r.value for r in rows}
@@ -99,7 +100,21 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
         pp_rows = db.query(models.StockPurchasePrice).filter(
             models.StockPurchasePrice.brand_id == brand_id
         ).all()
-    purchase_map = {r.sku: r.purchase_price for r in pp_rows}
+        purchase_map = {r.sku: r.purchase_price for r in pp_rows}
+
+        # Latest Bosta report for sell-through / days-remaining metrics
+        latest_report = db.query(models.BostaReport).filter(
+            models.BostaReport.brand_id == brand_id
+        ).order_by(models.BostaReport.uploaded_at.desc()).first()
+        qty_map, report_days = {}, 0
+        if latest_report:
+            report_rows = json.loads(latest_report.rows_json)
+            qty_map = {r["sku"]: r.get("total_quantity", 0) for r in report_rows}
+            if latest_report.date_from and latest_report.date_to:
+                from datetime import date as _date
+                d0 = _date.fromisoformat(latest_report.date_from)
+                d1 = _date.fromisoformat(latest_report.date_to)
+                report_days = max(1, (d1 - d0).days + 1)
 
     rows = []
     for p in products:
@@ -109,6 +124,19 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
         on_hand        = p.get("qty_available") or 0
         reserved       = p.get("virtual_available") or 0
         purchase_price = purchase_map.get(sku, 0)
+        sold           = qty_map.get(sku, 0)
+
+        # Days remaining & sell-through
+        if sold > 0 and report_days > 0:
+            daily          = sold / report_days
+            days_remaining = round(on_hand / daily) if daily > 0 else None
+            avg_daily      = round(daily, 2)
+        else:
+            days_remaining = None
+            avg_daily      = 0
+        total_units  = sold + on_hand
+        sell_through = round(sold / total_units * 100, 1) if total_units > 0 else None
+
         rows.append({
             "sku":            sku,
             "name":           name,
@@ -118,13 +146,24 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
             "reserved":       reserved,
             "consumer_value": round(on_hand * consumer_price, 2),
             "purchase_value": round(on_hand * purchase_price, 2),
+            "units_sold":     sold,
+            "avg_daily_sales": avg_daily,
+            "days_remaining": days_remaining,
+            "sell_through":   sell_through,
         })
+
+    capital_trapped = round(sum(
+        r["purchase_value"] for r in rows
+        if r["sell_through"] is not None and r["sell_through"] < 20
+    ), 2)
 
     return {
         "rows": rows,
         "total_onhand":         sum(r["on_hand"] for r in rows),
         "total_consumer_value": round(sum(r["consumer_value"] for r in rows), 2),
         "total_purchase_value": round(sum(r["purchase_value"] for r in rows), 2),
+        "capital_trapped":      capital_trapped,
+        "report_days":          report_days,
     }
 
 
@@ -132,7 +171,7 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
 def upsert_purchase_price(
     body:     StockPurchasePriceIn,
     brand_id: int = Depends(get_brand_id),
-    _user:    models.User = Depends(get_current_user),
+    _user:    models.User = Depends(require_writable),
 ):
     with get_db() as db:
         row = db.query(models.StockPurchasePrice).filter(

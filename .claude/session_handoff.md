@@ -4,6 +4,38 @@
 
 ---
 
+## Last Session — 2026-03-12
+
+### What Was Done
+
+#### Analytics & Stock Value Enhancements (from approved plan)
+
+**Backend:**
+- `app/routers/dashboard.py`: Added `_compute_report_pl(report, db)` helper shared by summary and bosta-summary endpoints. Added `GET /dashboard/trend` (all cashflow months In/Out/Net ordered chronologically). Added `GET /dashboard/bosta-summary` (latest report P&L: gross_profit, profit_pct, roas, ads_spent, date range, order_count). Enhanced `GET /dashboard/summary` to include `ytd_net`, `last_report_profit`, `last_report_profit_pct`.
+- `app/routers/settings.py`: Enhanced `GET /stock-value` — queries latest BostaReport, computes `qty_map` + `report_days`, adds `units_sold`, `avg_daily_sales`, `days_remaining`, `sell_through` per row; adds `capital_trapped` + `report_days` to response totals.
+
+**Frontend:**
+- `Analytics.jsx`: Fixed Money Out distribution (inlined JSX, removed helper). Added Money In by Source chart. Added Net stat card. Added Bosta P&L Summary card (from `/dashboard/bosta-summary`). Added "Load Stock Metrics" → Potential Revenue card (from `/stock-value`). Added All-Months Trend table (from `/dashboard/trend`, newest-first).
+- `StockValue.jsx`: Added 3 columns — Sold, Sell-Through (color-coded ≥60% success / 20-59% text / <20% danger), Days Left (≥30 success / 7-29 amber / <7 danger). Added GMROI + Slow Mover Capital summary cards (via `Promise.all` with `/dashboard/bosta-summary`).
+- `Home.jsx`: **Reverted** — no plan changes applied; original month/YTD/Last Report cards restored.
+
+#### Read Only User Permission
+
+**DB (migration 0015_user_readonly):** Added `read_only Boolean NOT NULL DEFAULT false` to `users` table.
+
+**Backend:**
+- `app/models.py`: Added `read_only` Boolean column.
+- `app/deps.py`: Added `require_writable` dependency — raises 403 if `user.read_only`.
+- `app/routers/auth.py`: Added `read_only` FormData param to `POST /auth/register`; included `read_only` in JWT payload + `/auth/me` response + `GET /users` response. Added `PUT /users/{user_id}/readonly` endpoint.
+- Applied `require_writable` to all write endpoints in `cashflow.py`, `bosta.py`, `products.py`, `settings.py`.
+
+**Frontend:**
+- `AuthContext.jsx`: Added `isReadOnly` state (set from JWT synchronously and from `/auth/me` async).
+- `App.jsx`: Added `{ path: '/settings', label: 'Settings' }` to `PERMISSIONED_PAGES`.
+- `Users.jsx`: Added Read Only column with toggle pill button per user; added Read Only checkbox in create form.
+
+---
+
 ## Last Session — 2026-03-11 (continued, part 4)
 
 ### What Was Done

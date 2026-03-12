@@ -1,3 +1,4 @@
+import os
 import re
 import io
 import json
@@ -16,7 +17,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.deps import get_db, get_current_user, get_brand_id
+from app.deps import get_db, get_current_user, get_brand_id, require_writable
 from app import models
 from sqlalchemy.orm import Session
 
@@ -199,6 +200,32 @@ async def debug_upload(file: UploadFile = File(...)):
     return {"headers": headers, "delivered_at_index": deliv_idx, "samples": samples}
 
 
+@router.post("/upload/prepare")
+async def upload_prepare(
+    file: UploadFile = File(...),
+    brand_id: int = Depends(get_brand_id),
+    _user: models.User = Depends(require_writable),
+):
+    """Sort the uploaded file and detect its date range without processing it yet."""
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Please upload an Excel file (.xlsx or .xls).")
+    contents = await file.read()
+    import bosta_daily as bd
+    tmp = tempfile.mkdtemp()
+    path = os.path.join(tmp, "upload.xlsx")
+    with open(path, "wb") as f:
+        f.write(contents)
+    try:
+        out, date_from, date_to = bd.sort_only(path)
+    except Exception as e:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=str(e))
+    fid = str(uuid.uuid4())
+    pending_exports[fid] = {"path": out, "tmp": tmp, "brand_id": brand_id,
+                            "date_from": date_from, "date_to": date_to}
+    return {"file_id": fid, "date_from": date_from, "date_to": date_to}
+
+
 @router.post("/upload")
 async def upload_excel(
     file: UploadFile = File(...),
@@ -236,6 +263,19 @@ def list_reports(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         ]
 
 
+@router.delete("/reports/{report_id}")
+def delete_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
+    with get_db() as db:
+        r = db.query(models.BostaReport).filter(
+            models.BostaReport.id == report_id, models.BostaReport.brand_id == brand_id
+        ).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Report not found.")
+        db.delete(r)
+        db.commit()
+    return {"ok": True}
+
+
 @router.get("/reports/{report_id}")
 def get_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
@@ -244,6 +284,14 @@ def get_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: mod
         ).first()
         if not r:
             raise HTTPException(status_code=404, detail="Report not found.")
+        rows = json.loads(r.rows_json)
+        # Overlay saved product names so inline-named "Unknown Product" rows
+        # reflect the name the user saved even after a refresh / re-upload.
+        products_map = get_products_map(db, brand_id)
+        for row in rows:
+            saved = products_map.get(row.get("sku"))
+            if saved:
+                row["name"] = saved
         return {
             "report_id": r.id,
             "id": r.id,
@@ -253,7 +301,7 @@ def get_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: mod
             "order_count": r.order_count,
             "grand_quantity": r.grand_quantity,
             "grand_revenue": r.grand_revenue,
-            "rows": json.loads(r.rows_json),
+            "rows": rows,
         }
 
 
@@ -295,7 +343,7 @@ class ReportPlPayload(BaseModel):
 
 
 @router.put("/reports/{report_id}/pl")
-def save_report_pl(report_id: int, payload: ReportPlPayload, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def save_report_pl(report_id: int, payload: ReportPlPayload, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     with get_db() as db:
         r = db.query(models.BostaReport).filter(
             models.BostaReport.id == report_id, models.BostaReport.brand_id == brand_id
@@ -392,7 +440,7 @@ class AutomateUploadBody(BaseModel):
 async def automation_upload(
     file_id:  str,
     body:     AutomateUploadBody,
-    _user:    models.User = Depends(get_current_user),
+    _user:    models.User = Depends(require_writable),
     brand_id: int = Depends(get_brand_id),
 ):
     info = pending_exports.pop(file_id, None)
@@ -440,7 +488,7 @@ def upsert_sku_cost_items(
     sku:      str,
     body:     CostItemsBody,
     brand_id: int = Depends(get_brand_id),
-    _user:    models.User = Depends(get_current_user),
+    _user:    models.User = Depends(require_writable),
 ):
     """Full replace: delete existing items for (brand_id, sku), then insert new ones."""
     with get_db() as db:

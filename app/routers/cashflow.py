@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
 
-from app.deps import get_db, get_current_user, get_brand_id
+from app.deps import get_db, get_current_user, get_brand_id, require_writable
 from app import models, schemas
 
 router = APIRouter()
@@ -17,7 +17,7 @@ def get_cashflow_months(brand_id: int = Depends(get_brand_id), _user: models.Use
 
 
 @router.post("/cashflow/months")
-def add_cashflow_month(payload: schemas.CashflowMonthIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def add_cashflow_month(payload: schemas.CashflowMonthIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     month = payload.month.strip()
     if not month:
         raise HTTPException(status_code=400, detail="Month is required.")
@@ -53,7 +53,7 @@ def get_cashflow_month(month: str, brand_id: int = Depends(get_brand_id), _user:
 
 
 @router.post("/cashflow/{month}/entries")
-def add_cashflow_entry(month: str, entry: schemas.CashflowEntryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def add_cashflow_entry(month: str, entry: schemas.CashflowEntryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     with get_db() as db:
         m = db.query(models.CashflowMonth).filter(
             models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
@@ -80,7 +80,7 @@ def add_cashflow_entry(month: str, entry: schemas.CashflowEntryIn, brand_id: int
 
 
 @router.delete("/cashflow/{month}/entries/{entry_id}")
-def delete_cashflow_entry(month: str, entry_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def delete_cashflow_entry(month: str, entry_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     with get_db() as db:
         m = db.query(models.CashflowMonth).filter(
             models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
@@ -110,7 +110,7 @@ def delete_cashflow_entry(month: str, entry_id: int, brand_id: int = Depends(get
 
 
 @router.put("/cashflow/{month}/entries/{entry_id}")
-def update_cashflow_entry(month: str, entry_id: int, entry: schemas.CashflowEntryUpdate, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def update_cashflow_entry(month: str, entry_id: int, entry: schemas.CashflowEntryUpdate, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     with get_db() as db:
         m = db.query(models.CashflowMonth).filter(
             models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
@@ -155,7 +155,7 @@ def list_categories(brand_id: int = Depends(get_brand_id), _user: models.User = 
 
 
 @router.post("/categories")
-def create_category(payload: CategoryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def create_category(payload: CategoryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     if payload.type not in ("in", "out"):
         raise HTTPException(status_code=400, detail="type must be 'in' or 'out'")
     name = payload.name.strip()
@@ -180,7 +180,7 @@ def create_category(payload: CategoryIn, brand_id: int = Depends(get_brand_id), 
 
 
 @router.put("/categories/{cat_id}")
-def rename_category(cat_id: int, payload: CategoryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def rename_category(cat_id: int, payload: CategoryIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     name = payload.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
@@ -197,7 +197,7 @@ def rename_category(cat_id: int, payload: CategoryIn, brand_id: int = Depends(ge
 
 
 @router.delete("/categories/{cat_id}")
-def delete_category(cat_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def delete_category(cat_id: int, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     with get_db() as db:
         cat = db.query(models.CashflowCategory).filter(
             models.CashflowCategory.id == cat_id,
@@ -211,7 +211,7 @@ def delete_category(cat_id: int, brand_id: int = Depends(get_brand_id), _user: m
 
 
 @router.put("/categories/reorder/{type}")
-def reorder_categories(type: str, payload: CategoryReorder, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def reorder_categories(type: str, payload: CategoryReorder, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     with get_db() as db:
         for order, cat_id in enumerate(payload.ids):
             db.query(models.CashflowCategory).filter(

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from app.routers import auth, cashflow, dashboard, products, settings, bosta
 
-app = FastAPI(title="SKU Sales Summary")
+app = FastAPI(title="EcomHQ")
 
 app.include_router(auth.router)
 app.include_router(cashflow.router)

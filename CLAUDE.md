@@ -97,7 +97,7 @@ import { S } from '../styles.js';
 |------|---------|
 | `main.py` | All FastAPI routes |
 | `app/models.py` | SQLAlchemy models |
-| `app/deps.py` | `get_db`, `get_current_user`, `require_admin` |
+| `app/deps.py` | `get_db`, `get_current_user`, `require_admin`, `require_writable` |
 | `app/schemas.py` | Pydantic request/response models |
 | `frontend/src/App.jsx` | Router, Layout, ProtectedRoute, `pageMeta` |
 | `frontend/src/context/AuthContext.jsx` | Token, role, name state |
@@ -112,6 +112,6 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-11): P&L enhancements — Unknown Product inline naming, Ads column auto-computed (price×5%+CPP), cost breakdown popup (migration 0013 `sku_cost_items`, drag-down copy). BostaOrders.jsx split into `components/pl/` + `utils/evalFormula.js`. Bosta daily automation complete and tested end-to-end.
-All migrations through 0013 applied locally; not yet deployed to Railway.
-Pending: password change, cashflow CSV export.
+Last session (2026-03-12): Analytics enhancements (trend table, Bosta P&L card, Potential Revenue card, Money In chart, Net card). Stock Value gains Sold/Sell-Through/Days Left columns + GMROI + Slow Mover Capital cards. New `require_writable` dep enforces read-only user flag (migration 0015) on all write endpoints. Settings added to PERMISSIONED_PAGES. Home.jsx reverted to original.
+All migrations through 0015 applied locally; not yet deployed to Railway.
+Pending: frontend read-only UI enforcement (disable write buttons when isReadOnly), password change, cashflow CSV export.

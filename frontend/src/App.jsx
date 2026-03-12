@@ -11,7 +11,6 @@ import Analytics   from './pages/Analytics.jsx';
 import Cashflow    from './pages/Cashflow.jsx';
 import BostaOrders from './pages/BostaOrders.jsx';
 import Products     from './pages/Products.jsx';
-import ProductsSold from './pages/ProductsSold.jsx';
 import StockValue   from './pages/StockValue.jsx';
 import Settings     from './pages/Settings.jsx';
 import Users        from './pages/Users.jsx';
@@ -19,18 +18,29 @@ import Categories   from './pages/Categories.jsx';
 import AdminPortal  from './pages/AdminPortal.jsx';
 
 const pageMeta = {
-  '/':           { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
-  '/analytics':  { title: 'Analytics',       subtitle: 'Money in/out totals and spend distribution.' },
-  '/cashflow':   { title: 'Cashflow',        subtitle: 'Track your daily money in and money out.' },
-  '/bosta':      { title: 'Bosta Orders',    subtitle: 'Upload a Bosta inventory export to generate a sales report by SKU.' },
-  '/products':       { title: 'Products',        subtitle: 'Maintain your SKU name list for reports.' },
-  '/products-sold':  { title: 'Products Sold',   subtitle: 'Monthly performance by product with profit tracking.' },
-  '/stock-value':    { title: 'Stock Value',     subtitle: 'Live inventory from Bosta — current stock value by product.' },
-  '/categories':     { title: 'Categories',       subtitle: 'Manage money in and money out categories for your brand.' },
-  '/settings':       { title: 'Settings',        subtitle: 'Configure integrations and API keys.' },
-  '/users':          { title: 'User Management', subtitle: 'Create and manage user accounts.' },
-  '/admin':          { title: 'Admin Overview',  subtitle: 'Numbers across all brands.' },
+  '/':              { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
+  '/analytics':     { title: 'Analytics',       subtitle: 'Money in/out totals and spend distribution.' },
+  '/cashflow':      { title: 'Cashflow',        subtitle: 'Track your daily money in and money out.' },
+  '/bosta':         { title: 'Bosta Orders',    subtitle: 'Upload a Bosta inventory export to generate a sales report by SKU.' },
+  '/stock-value':   { title: 'Stock Value',     subtitle: 'Live inventory from Bosta — current stock value by product.' },
+  '/products':      { title: 'Products',        subtitle: 'Maintain your SKU name list for reports.' },
+  '/categories':    { title: 'Categories',      subtitle: 'Manage money in and money out categories for your brand.' },
+  '/settings':      { title: 'Settings',        subtitle: 'Configure integrations and API keys.' },
+  '/users':         { title: 'User Management', subtitle: 'Create and manage user accounts.' },
+  '/admin':         { title: 'Admin Overview',  subtitle: 'Numbers across all brands.' },
 };
+
+// Pages that can be permission-controlled for viewer users (shown as checkboxes)
+export const PERMISSIONED_PAGES = [
+  { path: '/',            label: 'Dashboard'    },
+  { path: '/analytics',   label: 'Analytics'    },
+  { path: '/cashflow',    label: 'Cashflow'     },
+  { path: '/bosta',       label: 'Bosta Orders' },
+  { path: '/stock-value', label: 'Stock Value'  },
+  { path: '/products',    label: 'Products'     },
+  { path: '/categories',  label: 'Categories'   },
+  { path: '/settings',    label: 'Settings'     },
+];
 
 function SwitchBrandButton({ close }) {
   const { login } = useAuth();
@@ -61,11 +71,18 @@ function SwitchBrandButton({ close }) {
 }
 
 function Layout() {
-  const { userRole, currentUserEmail, currentUserName, brandName, logout } = useAuth();
+  const { userRole, currentUserEmail, currentUserName, brandName, allowedPages, logout } = useAuth();
   const location = useLocation();
   const meta = pageMeta[location.pathname] || { title: '', subtitle: '' };
   const [menuOpen, setMenuOpen] = useState(false);
   const close = () => setMenuOpen(false);
+
+  // Returns true if the current user can see a page path
+  const canSee = (path) => {
+    if (userRole === 'admin') return true;      // admins always see everything
+    if (!allowedPages) return true;             // null = unrestricted
+    return allowedPages.includes(path);
+  };
 
   const signOutBtn = (
     <button
@@ -141,21 +158,20 @@ function Layout() {
         )}
 
         <nav style={{ display: 'grid', gap: '.4rem' }}>
-          <NavLink to="/"          end  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Home</NavLink>
-          <NavLink to="/analytics"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Analytics</NavLink>
-          <NavLink to="/cashflow"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Cashflow</NavLink>
-          <NavLink to="/bosta"          style={({ isActive }) => S.navItem(isActive)} onClick={close}>Bosta Orders</NavLink>
-          <NavLink to="/products-sold"  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products Sold</NavLink>
-          <NavLink to="/stock-value"    style={({ isActive }) => S.navItem(isActive)} onClick={close}>Stock Value</NavLink>
-          <NavLink to="/products"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>
-          <NavLink to="/categories"     style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>
+          {canSee('/')            && <NavLink to="/"           end  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Home</NavLink>}
+          {canSee('/analytics')   && <NavLink to="/analytics"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Analytics</NavLink>}
+          {canSee('/cashflow')    && <NavLink to="/cashflow"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Cashflow</NavLink>}
+          {canSee('/bosta')       && <NavLink to="/bosta"           style={({ isActive }) => S.navItem(isActive)} onClick={close}>Bosta Orders</NavLink>}
+          {canSee('/stock-value') && <NavLink to="/stock-value"     style={({ isActive }) => S.navItem(isActive)} onClick={close}>Stock Value</NavLink>}
+          {canSee('/products')    && <NavLink to="/products"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>}
+          {canSee('/categories')  && <NavLink to="/categories"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>}
           {userRole === 'admin' && (
-            <NavLink to="/users"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
+            <NavLink to="/users" style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
           )}
         </nav>
 
         <div style={{ marginTop: 'auto', display: 'grid', gap: '.4rem' }}>
-          {userRole === 'admin' && (
+          {canSee('/settings') && (
             <NavLink to="/settings" style={({ isActive }) => S.navItem(isActive)} onClick={close}>⚙ Settings</NavLink>
           )}
           {signOutBtn}
@@ -177,11 +193,22 @@ function Layout() {
 }
 
 function ProtectedRoute() {
-  const { token, userRole, brandId } = useAuth();
+  const { token, userRole, brandId, allowedPages } = useAuth();
   const location = useLocation();
   if (!token) return <Navigate to="/login" replace />;
   if (userRole === 'admin' && brandId === null && location.pathname !== '/admin')
     return <Navigate to="/select-brand" replace />;
+  // Block viewers from pages not in their allowed list
+  if (userRole === 'viewer' && allowedPages !== null) {
+    const path = location.pathname === '/' ? '/' : `/${location.pathname.replace(/^\//, '')}`;
+    // Allow access to exact path; admin-only paths are blocked already by the sidebar
+    const permitted = allowedPages.includes(path);
+    if (!permitted) {
+      // Redirect to first allowed page, or login if none
+      const first = allowedPages[0];
+      return <Navigate to={first || '/login'} replace />;
+    }
+  }
   return <Outlet />;
 }
 
@@ -199,7 +226,6 @@ export default function App() {
               <Route path="analytics"  element={<Analytics />} />
               <Route path="cashflow"   element={<Cashflow />} />
               <Route path="bosta"      element={<BostaOrders />} />
-              <Route path="products-sold" element={<ProductsSold />} />
               <Route path="products"     element={<Products />} />
               <Route path="stock-value"  element={<StockValue />} />
               <Route path="categories"   element={<Categories />} />

@@ -1,6 +1,6 @@
 import { fmt, fmtN } from '../utils/format.js';
 
-export default function StatBar({ orderCount, revenue, expense, profit, profitPct }) {
+export default function StatBar({ orderCount, revenue, expense, profit, profitPct, title }) {
   const profitColor = profit >= 0 ? 'var(--accent)' : 'var(--danger, #ef4444)';
   const stats = [
     { label: 'Orders',        value: fmtN(orderCount),             color: 'var(--text)' },
@@ -10,7 +10,13 @@ export default function StatBar({ orderCount, revenue, expense, profit, profitPc
     { label: 'Profit %',      value: `${profitPct.toFixed(2)}%`,   color: profitColor   },
   ];
   return (
-    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+    <div>
+      {title && (
+        <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: '.6rem' }}>
+          {title}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
       {stats.map(s => (
         <div key={s.label} style={{
           flex: '1', minWidth: 140,
@@ -28,6 +34,7 @@ export default function StatBar({ orderCount, revenue, expense, profit, profitPc
           </div>
         </div>
       ))}
+      </div>
     </div>
   );
 }

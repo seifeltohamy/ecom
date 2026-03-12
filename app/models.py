@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Text, UniqueConstraint, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -20,13 +20,17 @@ class Brand(Base):
 
 class User(Base):
     __tablename__ = "users"
-    id            = Column(Integer, primary_key=True, index=True)
-    email         = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
-    role          = Column(Enum(UserRole), nullable=False, default=UserRole.viewer)
-    name          = Column(String(128), nullable=True)
-    brand_id      = Column(Integer, ForeignKey("brands.id"), nullable=True)  # NULL = admin
-    created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)
+    id                = Column(Integer, primary_key=True, index=True)
+    email             = Column(String(255), unique=True, index=True, nullable=False)
+    password_hash     = Column(String(255), nullable=False)
+    role              = Column(Enum(UserRole), nullable=False, default=UserRole.viewer)
+    name              = Column(String(128), nullable=True)
+    brand_id          = Column(Integer, ForeignKey("brands.id"), nullable=True)  # NULL = admin
+    created_at        = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # JSON TEXT arrays; NULL means unrestricted
+    allowed_pages     = Column(Text, nullable=True)   # viewer page whitelist, e.g. '["/","/cashflow"]'
+    allowed_brand_ids = Column(Text, nullable=True)   # admin brand whitelist, e.g. '[1,3]'
+    read_only         = Column(Boolean, nullable=False, default=False, server_default='false')
 
 
 class Product(Base):

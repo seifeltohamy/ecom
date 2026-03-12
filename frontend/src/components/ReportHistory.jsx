@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fmt, fmtN } from '../utils/format.js';
 import { S } from '../styles.js';
 import Card, { CardTitle } from './Card.jsx';
@@ -12,7 +13,9 @@ const thStyle = {
 const tdStyle = { padding: '.65rem .85rem', borderBottom: '1px solid var(--border)', fontSize: '.875rem' };
 
 /** Bosta report history table card. */
-export default function ReportHistory({ history, loading, onView }) {
+export default function ReportHistory({ history, loading, onView, onDelete }) {
+  const [confirmId, setConfirmId] = useState(null); // id waiting for delete confirm
+
   return (
     <Card>
       <CardTitle>Report History ({history.length})</CardTitle>
@@ -40,7 +43,23 @@ export default function ReportHistory({ history, loading, onView }) {
                   <td style={tdStyle}>{fmtN(h.order_count)}</td>
                   <td style={{ ...tdStyle, textAlign: 'right', ...S.mono, color: 'var(--accent)' }}>EGP {fmt(h.grand_revenue)}</td>
                   <td style={{ ...tdStyle, textAlign: 'right' }}>
-                    <Btn variant="outline" onClick={() => onView(h.id)}>View</Btn>
+                    <div style={{ display: 'flex', gap: '.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {confirmId === h.id ? (
+                        <>
+                          <span style={{ fontSize: '.78rem', color: 'var(--muted)' }}>Delete?</span>
+                          <Btn variant="outline" style={{ color: 'var(--danger, #ef4444)', borderColor: 'var(--danger, #ef4444)' }}
+                            onClick={() => { onDelete(h.id); setConfirmId(null); }}>Yes</Btn>
+                          <Btn variant="outline" onClick={() => setConfirmId(null)}>No</Btn>
+                        </>
+                      ) : (
+                        <>
+                          <Btn variant="outline" onClick={() => onView(h.id)}>View</Btn>
+                          <Btn variant="outline"
+                            style={{ color: 'var(--danger, #ef4444)', borderColor: 'var(--danger, #ef4444)' }}
+                            onClick={() => setConfirmId(h.id)}>Delete</Btn>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

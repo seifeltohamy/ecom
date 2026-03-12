@@ -7,6 +7,29 @@ from app import models
 router = APIRouter()
 
 
+def _compute_report_pl(report, db):
+    """Return (gross_profit, profit_pct, roas) for a BostaReport object."""
+    rows = json.loads(report.rows_json)
+    qty_map = {r["sku"]: r.get("total_quantity", 0) for r in rows}
+    pl_items = db.query(models.BostaReportPl).filter(
+        models.BostaReportPl.report_id == report.id
+    ).all()
+    cpp = (report.ads_spent / report.order_count) if (report.ads_spent and report.order_count) else 0
+    total_revenue = total_expense = 0.0
+    for item in pl_items:
+        qty   = qty_map.get(item.sku, 0)
+        price = item.price or 0
+        cost  = item.cost or 0
+        extra = item.extra_cost or 0
+        ads_col = price * 0.05 + cpp
+        total_revenue += price * qty
+        total_expense += (cost + extra + ads_col) * qty
+    gross_profit = round(total_revenue - total_expense, 2)
+    profit_pct   = round(gross_profit / total_revenue * 100, 2) if total_revenue else 0
+    roas         = round(total_revenue / report.ads_spent, 2) if report.ads_spent else None
+    return gross_profit, profit_pct, roas
+
+
 @router.get("/dashboard/summary")
 def dashboard_summary(month: str = None, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     from datetime import datetime as _dt
@@ -47,6 +70,7 @@ def dashboard_summary(month: str = None, brand_id: int = Depends(get_brand_id), 
             models.BostaReport.brand_id == brand_id
         ).order_by(models.BostaReport.uploaded_at.desc()).first()
         last_report = top_sku = None
+        last_report_profit = last_report_profit_pct = None
         if last_rpt:
             last_report = {
                 "uploaded_at": last_rpt.uploaded_at.isoformat(),
@@ -57,17 +81,68 @@ def dashboard_summary(month: str = None, brand_id: int = Depends(get_brand_id), 
             if rows:
                 best = max(rows, key=lambda x: x.get("total_quantity", 0))
                 top_sku = {"sku": best["sku"], "name": best["name"], "total_quantity": best["total_quantity"]}
+            gross_profit, profit_pct, _ = _compute_report_pl(last_rpt, db)
+            last_report_profit     = gross_profit
+            last_report_profit_pct = profit_pct
 
     return {
-        "this_month_in":  round(this_month_in,  2),
-        "this_month_out": round(this_month_out, 2),
-        "this_month_net": round(this_month_in - this_month_out, 2),
-        "total_in_ytd":   round(total_in_ytd,   2),
-        "total_out_ytd":  round(total_out_ytd,  2),
-        "last_report":    last_report,
-        "top_sku":        top_sku,
-        "current_month":  current_month_name,
+        "this_month_in":         round(this_month_in,  2),
+        "this_month_out":        round(this_month_out, 2),
+        "this_month_net":        round(this_month_in - this_month_out, 2),
+        "total_in_ytd":          round(total_in_ytd,   2),
+        "total_out_ytd":         round(total_out_ytd,  2),
+        "ytd_net":               round(total_in_ytd - total_out_ytd, 2),
+        "last_report":           last_report,
+        "top_sku":               top_sku,
+        "current_month":         current_month_name,
+        "last_report_profit":    last_report_profit,
+        "last_report_profit_pct": last_report_profit_pct,
     }
+
+
+@router.get("/dashboard/trend")
+def dashboard_trend(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        months = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.brand_id == brand_id
+        ).order_by(models.CashflowMonth.created_at).all()
+        result = []
+        for m in months:
+            entries = db.query(models.CashflowEntry).filter(
+                models.CashflowEntry.month_id == m.id
+            ).all()
+            money_in  = round(sum(e.amount for e in entries if e.type == "in"), 2)
+            money_out = round(sum(e.amount for e in entries if e.type == "out"), 2)
+            result.append({
+                "month":     m.name,
+                "money_in":  money_in,
+                "money_out": money_out,
+                "net":       round(money_in - money_out, 2),
+            })
+        return result
+
+
+@router.get("/dashboard/bosta-summary")
+def bosta_summary(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    with get_db() as db:
+        report = db.query(models.BostaReport).filter(
+            models.BostaReport.brand_id == brand_id
+        ).order_by(models.BostaReport.uploaded_at.desc()).first()
+        if not report:
+            return None
+        gross_profit, profit_pct, roas = _compute_report_pl(report, db)
+        return {
+            "report_id":   report.id,
+            "uploaded_at": report.uploaded_at.isoformat(),
+            "date_from":   report.date_from,
+            "date_to":     report.date_to,
+            "order_count": report.order_count,
+            "grand_revenue": report.grand_revenue,
+            "gross_profit":  gross_profit,
+            "profit_pct":    profit_pct,
+            "ads_spent":     report.ads_spent,
+            "roas":          roas,
+        }
 
 
 @router.get("/admin/overview", tags=["admin"])

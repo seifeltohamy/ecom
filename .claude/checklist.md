@@ -38,6 +38,11 @@
 - [x] **Bosta Orders UX overhaul** — Cost cell always opens popup (no direct edit); "Automate Export" SSE button; DateRangeButton removed; StatBar moved below P&L (Orders/Revenue/Expense/Net Profit/Profit%); fill-drag on cost cells
 - [x] **main.py split into app/routers/** — auth, cashflow, dashboard, products, settings, bosta routers; main.py reduced to 37 lines
 - [x] **BostaOrders component split** — `utils/evalFormula.js`, `components/pl/{PlEditCell,RefTd,CostPopup,PlTableRow}.jsx`, `components/ReportHistory.jsx`; BostaOrders.jsx ~280 lines (state + layout only)
+- [x] **Analytics enhancements** — Net stat card; Money In by Source distribution chart; Bosta P&L Summary card; Potential Revenue from Stock card (button-triggered); All-Months Trend table; fixed Money Out distribution chart (inlined JSX)
+- [x] **Stock Value — sold/sell-through/days metrics** — `GET /stock-value` now returns `units_sold`, `avg_daily_sales`, `days_remaining`, `sell_through` per row; `capital_trapped` + `report_days` in totals. Frontend shows Sold, Sell-Through%, Days Left columns with color coding; GMROI + Slow Mover Capital summary cards.
+- [x] **Dashboard trend + Bosta summary endpoints** — `GET /dashboard/trend`, `GET /dashboard/bosta-summary`, enhanced `GET /dashboard/summary` with `ytd_net` + profit fields
+- [x] **Read Only user permission** — `users.read_only` column (migration 0015); `require_writable` dep on all write endpoints; `PUT /users/{id}/readonly`; `isReadOnly` in AuthContext; toggle UI in Users.jsx
+- [x] **Settings in viewer page permissions** — `/settings` added to `PERMISSIONED_PAGES` in App.jsx so admins can grant viewers settings access
 
 ## In Progress
 

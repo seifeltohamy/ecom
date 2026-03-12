@@ -4,7 +4,7 @@ from datetime import datetime as _dt
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
 
-from app.deps import get_db, get_current_user, get_brand_id
+from app.deps import get_db, get_current_user, get_brand_id, require_writable
 from app import models, schemas
 
 router = APIRouter()
@@ -18,7 +18,7 @@ def get_products(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
 
 
 @router.post("/products")
-def add_product(product: schemas.ProductIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def add_product(product: schemas.ProductIn, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     sku = product.sku.strip()
     name = product.name.strip()
     if not sku or not name:
@@ -36,7 +36,7 @@ def add_product(product: schemas.ProductIn, brand_id: int = Depends(get_brand_id
 
 
 @router.delete("/products/{sku}")
-def delete_product(sku: str, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def delete_product(sku: str, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
     with get_db() as db:
         product = db.query(models.Product).filter(
             models.Product.sku == sku, models.Product.brand_id == brand_id

@@ -8,19 +8,19 @@ import Spinner from '../components/Spinner.jsx';
 import Alert from '../components/Alert.jsx';
 
 export default function StockValue() {
-  const [rows,    setRows]    = useState([]);
-  const [totals,  setTotals]  = useState({ total_onhand: 0, total_consumer_value: 0, total_purchase_value: 0 });
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
-  const [sort,    setSort]    = useState({ key: null, dir: 'asc' });
-  // purchasePrices: { sku → string } — tracks edited input values
+  const [rows,         setRows]         = useState([]);
+  const [totals,       setTotals]       = useState({ total_onhand: 0, total_consumer_value: 0, total_purchase_value: 0, capital_trapped: 0 });
+  const [gmroi,        setGmroi]        = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState('');
+  const [sort,         setSort]         = useState({ key: null, dir: 'asc' });
   const [purchasePrices, setPurchasePrices] = useState({});
   const savingRef = useRef({});
 
   const toggleSort = (key) => setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
 
   const sortedRows = sort.key ? [...rows].sort((a, b) => {
-    const av = a[sort.key], bv = b[sort.key];
+    const av = a[sort.key] ?? -Infinity, bv = b[sort.key] ?? -Infinity;
     const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
     return sort.dir === 'asc' ? cmp : -cmp;
   }) : rows;
@@ -28,24 +28,38 @@ export default function StockValue() {
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
-    const res = await authFetch('/stock-value');
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
+    const [stockRes, bosRes] = await Promise.all([
+      authFetch('/stock-value'),
+      authFetch('/dashboard/bosta-summary'),
+    ]);
+    if (!stockRes.ok) {
+      const j = await stockRes.json().catch(() => ({}));
       setError(j.detail || 'Failed to load stock data.');
       setLoading(false);
       return;
     }
-    const data = await res.json();
+    const data = await stockRes.json();
     setRows(data.rows || []);
     setTotals({
       total_onhand:         data.total_onhand,
       total_consumer_value: data.total_consumer_value,
       total_purchase_value: data.total_purchase_value,
+      capital_trapped:      data.capital_trapped ?? 0,
     });
-    // Seed purchase price inputs from fetched data
     const pp = {};
     (data.rows || []).forEach(r => { pp[r.sku] = String(r.purchase_price || ''); });
     setPurchasePrices(pp);
+
+    // GMROI = gross_profit / total_purchase_value
+    if (bosRes.ok) {
+      const bos = await bosRes.json().catch(() => null);
+      if (bos && bos.gross_profit != null && data.total_purchase_value > 0) {
+        setGmroi(bos.gross_profit / data.total_purchase_value);
+      } else {
+        setGmroi(null);
+      }
+    }
+
     setLoading(false);
   }, []);
 
@@ -67,7 +81,6 @@ export default function StockValue() {
       body: JSON.stringify({ sku, price }),
     });
     savingRef.current[sku] = false;
-    // Update local row purchase_value without full reload
     setRows(prev => prev.map(r => r.sku === sku
       ? { ...r, purchase_price: price, purchase_value: round2(r.on_hand * price) }
       : r
@@ -96,11 +109,27 @@ export default function StockValue() {
   };
   const tdLeft = { ...tdStyle, textAlign: 'left' };
 
+  const sellThroughColor = (v) => {
+    if (v == null) return 'var(--muted)';
+    if (v >= 60)  return 'var(--success)';
+    if (v >= 20)  return 'var(--text)';
+    return 'var(--danger)';
+  };
+  const daysColor = (v) => {
+    if (v == null) return 'var(--muted)';
+    if (v >= 30)  return 'var(--success)';
+    if (v >= 7)   return '#f59e0b';
+    return 'var(--danger)';
+  };
+
   const cols = [
     { key: 'sku',            label: 'SKU',               style: thLeft },
     { key: 'name',           label: 'Product Name',      style: thLeft },
     { key: 'on_hand',        label: 'On Hand',           style: thStyle },
     { key: 'reserved',       label: 'Reserved',          style: thStyle },
+    { key: 'units_sold',     label: 'Sold',              style: thStyle },
+    { key: 'sell_through',   label: 'Sell-Through',      style: thStyle },
+    { key: 'days_remaining', label: 'Days Left',         style: thStyle },
     { key: 'consumer_price', label: 'Consumer Price',    style: thStyle },
     { key: 'consumer_value', label: 'Consumer Value',    style: { ...thStyle, color: 'var(--accent)' } },
     { key: 'purchase_price', label: 'Purchase Price',    style: { ...thStyle, color: '#60a5fa' }, sortable: false },
@@ -173,6 +202,15 @@ export default function StockValue() {
                     <td style={{ ...tdStyle, color: 'var(--muted)' }}>
                       {fmtN(row.reserved)}
                     </td>
+                    <td style={{ ...tdStyle, color: 'var(--muted)' }}>
+                      {row.units_sold > 0 ? fmtN(row.units_sold) : '—'}
+                    </td>
+                    <td style={{ ...tdStyle, color: sellThroughColor(row.sell_through), fontWeight: 600 }}>
+                      {row.sell_through != null ? `${row.sell_through}%` : '—'}
+                    </td>
+                    <td style={{ ...tdStyle, color: daysColor(row.days_remaining), fontWeight: 600 }}>
+                      {row.days_remaining != null ? fmtN(row.days_remaining) : '—'}
+                    </td>
                     <td style={{ ...tdStyle, color: 'var(--text)' }}>
                       {fmt(row.consumer_price)}
                     </td>
@@ -209,6 +247,9 @@ export default function StockValue() {
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{fmtN(totals.total_onhand)}</td>
                   <td style={tdStyle} />
                   <td style={tdStyle} />
+                  <td style={tdStyle} />
+                  <td style={tdStyle} />
+                  <td style={tdStyle} />
                   <td style={{ ...tdStyle, fontWeight: 700, color: 'var(--accent)' }}>{fmt(totals.total_consumer_value)}</td>
                   <td style={tdStyle} />
                   <td style={{ ...tdStyle, fontWeight: 700, color: '#60a5fa' }}>{fmt(totals.total_purchase_value)}</td>
@@ -226,9 +267,21 @@ export default function StockValue() {
             {[
               { label: 'Total SKUs',          value: fmtN(rows.length) },
               { label: 'Total On Hand',        value: fmtN(totals.total_onhand) },
-              { label: 'Total Consumer Value', value: fmt(totals.total_consumer_value), color: 'var(--accent)' },
-              { label: 'Total Purchase Value', value: fmt(totals.total_purchase_value), color: '#60a5fa' },
-            ].map(({ label, value, color }) => (
+              { label: 'Total Consumer Value', value: `EGP ${fmt(totals.total_consumer_value)}`, color: 'var(--accent)' },
+              { label: 'Total Purchase Value', value: `EGP ${fmt(totals.total_purchase_value)}`, color: '#60a5fa' },
+              ...(totals.capital_trapped > 0 ? [{
+                label: 'Slow Mover Capital',
+                value: `EGP ${fmt(totals.capital_trapped)}`,
+                color: 'var(--danger)',
+                hint: 'Stock with < 20% sell-through',
+              }] : []),
+              ...(gmroi != null ? [{
+                label: 'GMROI',
+                value: `${gmroi.toFixed(2)}×`,
+                color: gmroi >= 1 ? 'var(--success)' : 'var(--danger)',
+                hint: 'Gross Profit / Purchase Value',
+              }] : []),
+            ].map(({ label, value, color, hint }) => (
               <div key={label} style={{
                 background: 'var(--bg, #0c0a09)', border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-sm)', padding: '1rem 1.25rem'
@@ -239,6 +292,7 @@ export default function StockValue() {
                 <div style={{ fontSize: '1.4rem', fontWeight: 700, color: color || '#fafafa', fontVariantNumeric: 'tabular-nums' }}>
                   {value}
                 </div>
+                {hint && <div style={{ fontSize: '.68rem', color: 'var(--muted)', marginTop: '.25rem' }}>{hint}</div>}
               </div>
             ))}
           </div>

@@ -10,11 +10,15 @@ export function AuthProvider({ children }) {
   const [currentUserName,  setCurrentUserName]  = useState('');
   const [brandId,          setBrandId]          = useState(null);
   const [brandName,        setBrandName]        = useState('');
+  const [allowedPages,     setAllowedPages]     = useState(null); // null = unrestricted
+  const [allowedBrandIds,  setAllowedBrandIds]  = useState(null); // null = all brands
+  const [isReadOnly,       setIsReadOnly]       = useState(false);
 
   useEffect(() => {
     if (!token) {
       setUserRole(null); setCurrentUserEmail(null); setCurrentUserName('');
       setBrandId(null); setBrandName('');
+      setAllowedPages(null); setAllowedBrandIds(null); setIsReadOnly(false);
       return;
     }
     authFetch('/auth/me')
@@ -30,24 +34,29 @@ export function AuthProvider({ children }) {
           setCurrentUserName(d.name || '');
           setBrandId(d.brand_id ?? null);
           setBrandName(d.brand_name || '');
+          setAllowedPages(d.allowed_pages ?? null);
+          setAllowedBrandIds(d.allowed_brand_ids ?? null);
+          setIsReadOnly(d.read_only ?? false);
         }
       })
       .catch(() => {});
   }, [token]);
 
-  const login  = (t) => {
+  const login = (t) => {
     saveToken(t);
-    // Immediately parse JWT payload so brandId/role are set synchronously
-    // before any navigation — prevents ProtectedRoute from seeing brandId=null
+    // Parse JWT synchronously to avoid ProtectedRoute race condition
     try {
       const payload = JSON.parse(atob(t.split('.')[1]));
       if (payload.role)  setUserRole(payload.role);
       setBrandId(payload.brand_id ?? null);
       if (payload.brand_name !== undefined) setBrandName(payload.brand_name || '');
+      setAllowedPages(payload.allowed_pages ?? null);
+      setAllowedBrandIds(payload.allowed_brand_ids ?? null);
+      setIsReadOnly(payload.read_only ?? false);
     } catch {}
     setToken(t);
   };
-  const logout = ()  => { clearToken(); setToken(null); };
+  const logout = () => { clearToken(); setToken(null); };
 
   const updateName = async (name) => {
     const res = await authFetch('/users/me', {
@@ -60,7 +69,11 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ token, userRole, currentUserEmail, currentUserName, brandId, brandName, login, logout, updateName }}>
+    <AuthContext.Provider value={{
+      token, userRole, currentUserEmail, currentUserName,
+      brandId, brandName, allowedPages, allowedBrandIds, isReadOnly,
+      login, logout, updateName,
+    }}>
       {children}
     </AuthContext.Provider>
   );

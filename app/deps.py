@@ -35,6 +35,13 @@ def require_admin(user: models.User = Depends(get_current_user)):
     return user
 
 
+def require_writable(user: models.User = Depends(get_current_user)):
+    """Raises 403 if the user is flagged as read-only."""
+    if user.read_only:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your account is read-only.")
+    return user
+
+
 def get_brand_id(token: str = Depends(oauth2_scheme)) -> int:
     """Extract brand_id from the JWT. Raises 403 if admin has not selected a brand yet."""
     payload = auth.decode_token(token)

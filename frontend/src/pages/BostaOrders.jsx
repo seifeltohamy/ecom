@@ -9,6 +9,7 @@ import Spinner from '../components/Spinner.jsx';
 import DropZone from '../components/DropZone.jsx';
 import StatBar from '../components/StatBar.jsx';
 import AutomateModal from '../components/AutomateModal.jsx';
+import DiscountsPanel from '../components/DiscountsPanel.jsx';
 import CostPopup from '../components/pl/CostPopup.jsx';
 import PlTableRow from '../components/pl/PlTableRow.jsx';
 import ReportHistory from '../components/ReportHistory.jsx';
@@ -28,6 +29,16 @@ export default function BostaOrders() {
 
   // ── Automation modal ───────────────────────────────────────────────────────
   const [automateOpen, setAutomateOpen] = useState(false);
+
+  // ── Discounts / Offers ─────────────────────────────────────────────────────
+  const [offers,        setOffers]        = useState([]);
+  const [discountsOpen, setDiscountsOpen] = useState(false);
+  // Reset offers whenever a new report loads
+  useEffect(() => { setOffers([]); }, [report]);
+
+  // ── Upload date-confirm phase ──────────────────────────────────────────────
+  // { fileId, dateFrom, dateTo } while waiting for user to confirm dates; null otherwise
+  const [uploadPending, setUploadPending] = useState(null);
 
   // ── History ────────────────────────────────────────────────────────────────
   const [history,        setHistory]        = useState([]);
@@ -197,23 +208,49 @@ export default function BostaOrders() {
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
+  // Phase 1: upload file → detect date range
   const upload = async () => {
     if (!file) return;
     setLoading(true);
-    setStatus({ type: 'loading', msg: 'Processing…' });
+    setStatus({ type: 'loading', msg: 'Sorting rows…' });
     const fd = new FormData();
     fd.append('file', file);
     try {
-      const res  = await authFetch('/upload', { method: 'POST', body: fd });
+      const res  = await authFetch('/upload/prepare', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Upload failed');
-      setStatus(null); setReport(data); loadHistory();
+      setStatus(null);
+      setUploadPending({ fileId: data.file_id, dateFrom: data.date_from, dateTo: data.date_to });
     } catch (err) {
       setStatus({ type: 'error', msg: err.message });
     } finally { setLoading(false); }
   };
 
-  const clear = () => { setFile(null); setReport(null); setStatus(null); };
+  // Phase 2: confirm date range → run report
+  const confirmUpload = async () => {
+    if (!uploadPending) return;
+    setLoading(true);
+    setStatus({ type: 'loading', msg: 'Processing…' });
+    try {
+      const res  = await authFetch(`/automation/upload/${uploadPending.fileId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date_from: uploadPending.dateFrom, date_to: uploadPending.dateTo }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Processing failed');
+      setStatus(null); setReport(data); setUploadPending(null); loadHistory();
+    } catch (err) {
+      setStatus({ type: 'error', msg: err.message });
+    } finally { setLoading(false); }
+  };
+
+  const clear = () => { setFile(null); setReport(null); setStatus(null); setUploadPending(null); };
+
+  const deleteReport = async (id) => {
+    await authFetch(`/reports/${id}`, { method: 'DELETE' });
+    setHistory(prev => prev.filter(h => h.id !== id));
+    if (report?.id === id || report?.report_id === id) { setReport(null); }
+  };
 
   const viewReport = async (id) => {
     const res  = await authFetch(`/reports/${id}`);
@@ -268,6 +305,22 @@ export default function BostaOrders() {
   const cpp        = ads && report?.order_count ? ads / report.order_count : null;
   const roas       = ads && plTotals.revenue    ? plTotals.revenue / ads   : null;
 
+  // ── Offer-adjusted totals ──────────────────────────────────────────────────
+  const offerTotals = offers.length > 0 ? plRows.reduce((acc, row) => {
+    const offer = offers.find(o => o.skus.includes(row.sku));
+    let revenue = row.revenue;
+    if (offer) {
+      if (offer.type === 'b2g1') {
+        revenue = (row.qty - Math.floor(row.qty / 3)) * row.price;
+      } else {
+        revenue = row.revenue * (1 - offer.discountPct / 100);
+      }
+    }
+    const profit = revenue - row.expense;
+    return { revenue: acc.revenue + revenue, expense: acc.expense + row.expense, profit: acc.profit + profit };
+  }, { revenue: 0, expense: 0, profit: 0 }) : null;
+  const offerTotalPct = offerTotals?.revenue ? offerTotals.profit / offerTotals.revenue * 100 : 0;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -293,14 +346,44 @@ export default function BostaOrders() {
       {/* Upload */}
       <Card>
         <CardTitle>Upload New Report</CardTitle>
-        <DropZone onFile={setFile} file={file} />
-        <div style={{ display: 'flex', gap: '.6rem', marginTop: '1rem', alignItems: 'center' }}>
-          <Btn disabled={!file || loading} onClick={upload}>
-            {loading ? <><Spinner size={13} /> Processing…</> : 'Run Report'}
-          </Btn>
-          <Btn variant="outline" onClick={() => setAutomateOpen(true)}>Automate Export</Btn>
-          {report && <Btn variant="outline" onClick={clear}>Clear</Btn>}
-        </div>
+        <DropZone onFile={f => { setFile(f); setUploadPending(null); }} file={file} />
+
+        {/* Phase 2: date confirmation */}
+        {uploadPending && (
+          <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--surface2, var(--bg))', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '.85rem', fontWeight: 600, marginBottom: '.75rem', color: 'var(--text)' }}>
+              Detected date range — adjust if needed:
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <label style={{ fontSize: '.82rem', color: 'var(--muted)' }}>
+                From&nbsp;
+                <input type="date" value={uploadPending.dateFrom}
+                  onChange={e => setUploadPending(p => ({ ...p, dateFrom: e.target.value }))}
+                  style={{ marginLeft: '.25rem', padding: '.25rem .4rem', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '.85rem' }} />
+              </label>
+              <label style={{ fontSize: '.82rem', color: 'var(--muted)' }}>
+                To&nbsp;
+                <input type="date" value={uploadPending.dateTo}
+                  onChange={e => setUploadPending(p => ({ ...p, dateTo: e.target.value }))}
+                  style={{ marginLeft: '.25rem', padding: '.25rem .4rem', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontSize: '.85rem' }} />
+              </label>
+              <Btn disabled={loading} onClick={confirmUpload}>
+                {loading ? <><Spinner size={13} /> Processing…</> : 'Process'}
+              </Btn>
+              <Btn variant="outline" onClick={() => setUploadPending(null)}>Cancel</Btn>
+            </div>
+          </div>
+        )}
+
+        {!uploadPending && (
+          <div style={{ display: 'flex', gap: '.6rem', marginTop: '1rem', alignItems: 'center' }}>
+            <Btn disabled={!file || loading} onClick={upload}>
+              {loading ? <><Spinner size={13} /> Sorting…</> : 'Run Report'}
+            </Btn>
+            <Btn variant="outline" onClick={() => setAutomateOpen(true)}>Automate Export</Btn>
+            {report && <Btn variant="outline" onClick={clear}>Clear</Btn>}
+          </div>
+        )}
         {status && <Alert type={status.type}>{status.msg}</Alert>}
       </Card>
 
@@ -341,6 +424,9 @@ export default function BostaOrders() {
                   {saveState === 'saving' ? <><Spinner size={13} /> Saving…</> : saveState === 'saved' ? '✓ Saved' : 'Save P&L'}
                 </Btn>
                 {saveState === 'saved' && <span style={{ fontSize: '.75rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>Autosaved</span>}
+                <Btn variant="outline" onClick={() => setDiscountsOpen(true)}>
+                  Discounts{offers.length > 0 ? ` (${offers.length})` : ''}
+                </Btn>
               </div>
             </div>
 
@@ -389,6 +475,15 @@ export default function BostaOrders() {
             </div>
           </Card>
 
+          {discountsOpen && (
+            <DiscountsPanel
+              report={report}
+              offers={offers}
+              onOffersChange={setOffers}
+              onClose={() => setDiscountsOpen(false)}
+            />
+          )}
+
           {/* Stats — below P&L table */}
           <StatBar
             orderCount={report.order_count}
@@ -397,10 +492,22 @@ export default function BostaOrders() {
             profit={plTotals.profit}
             profitPct={plTotalPct}
           />
+
+          {/* Analytics after offers — only shown when offers are active */}
+          {offerTotals && (
+            <StatBar
+              title="Analytics after offers"
+              orderCount={report.order_count}
+              revenue={offerTotals.revenue}
+              expense={offerTotals.expense}
+              profit={offerTotals.profit}
+              profitPct={offerTotalPct}
+            />
+          )}
         </>
       )}
 
-      <ReportHistory history={history} loading={historyLoading} onView={viewReport} />
+      <ReportHistory history={history} loading={historyLoading} onView={viewReport} onDelete={deleteReport} />
     </div>
   );
 }

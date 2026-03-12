@@ -6,7 +6,7 @@
 
 ### POST /auth/register
 - **Auth:** Bearer + require_admin + brand in JWT (viewers assigned to admin's current brand)
-- **Body:** FormData — `email`, `password`, `role` (admin|viewer), `name` (optional)
+- **Body:** FormData — `email`, `password`, `role` (admin|viewer), `name` (optional), `read_only` (optional, "true"/"false"), `allowed_pages` (optional, JSON array of paths)
 - **Response:** `{ ok, email, role }`
 - **Errors:** 400 if email already registered or invalid role; 403 if no brand selected
 
@@ -19,7 +19,7 @@
 
 ### GET /auth/me
 - **Auth:** Bearer token (any role)
-- **Response:** `{ email, role, name, brand_id, brand_name }`
+- **Response:** `{ email, role, name, brand_id, brand_name, allowed_pages, allowed_brand_ids, read_only }`
 
 ### POST /auth/select-brand
 - **Auth:** Bearer + require_admin (no brand required)
@@ -171,10 +171,36 @@
 - **Response:**
   ```
   { this_month_in, this_month_out, this_month_net,
-    total_in_ytd, total_out_ytd,
+    total_in_ytd, total_out_ytd, ytd_net,
     last_report: { uploaded_at, order_count, grand_revenue } | null,
+    last_report_profit: float | null,
+    last_report_profit_pct: float | null,
     top_sku: { sku, name, total_quantity } | null,
     current_month }
+  ```
+
+### GET /dashboard/trend
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** All cashflow months in chronological order:
+  ```json
+  [{ "month": "Jan 2026", "money_in": 50000.0, "money_out": 20000.0, "net": 30000.0 }]
+  ```
+
+### GET /dashboard/bosta-summary
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** Latest Bosta report P&L aggregates (or `null` if no report):
+  ```json
+  {
+    "report_id": 1,
+    "uploaded_at": "2026-03-10T12:00:00",
+    "date_from": "2026-03-01", "date_to": "2026-03-10",
+    "order_count": 120,
+    "grand_revenue": 85000.0,
+    "gross_profit": 30000.0,
+    "profit_pct": 35.29,
+    "ads_spent": 5000.0,
+    "roas": 17.0
+  }
   ```
 
 ---
@@ -185,13 +211,25 @@
 - **Auth:** Bearer + require_admin + brand in JWT
 - **Response:** `User[]` — only users belonging to this brand
   ```
-  { id, email, name, role, created_at }
+  { id, email, name, role, created_at, allowed_pages, read_only }
   ```
 
 ### PUT /users/{user_id}
 - **Auth:** Bearer + require_admin
 - **Body:** JSON — `{ name: string }`
 - **Response:** `{ ok, name }`
+- **Errors:** 404 if user not found
+
+### PUT /users/{user_id}/pages
+- **Auth:** Bearer + require_admin
+- **Body:** JSON — `{ allowed_pages: string[] | null }` (null = unrestricted)
+- **Response:** `{ ok: true }`
+- **Errors:** 404 if user not found
+
+### PUT /users/{user_id}/readonly
+- **Auth:** Bearer + require_admin
+- **Body:** JSON — `{ read_only: bool }`
+- **Response:** `{ ok: true }`
 - **Errors:** 404 if user not found
 
 ### DELETE /users/{user_id}
@@ -246,13 +284,20 @@
       "on_hand": 10,
       "reserved": 2,
       "consumer_value": 2500.0,
-      "purchase_value": 1200.0
+      "purchase_value": 1200.0,
+      "units_sold": 30,
+      "avg_daily_sales": 3.0,
+      "days_remaining": 3,
+      "sell_through": 75.0
     }],
     "total_onhand": 10,
     "total_consumer_value": 2500.0,
-    "total_purchase_value": 1200.0
+    "total_purchase_value": 1200.0,
+    "capital_trapped": 0.0,
+    "report_days": 10
   }
   ```
+- **Notes:** `units_sold`/`avg_daily_sales`/`days_remaining`/`sell_through` are null/0 when no Bosta report exists. `sell_through` = `units_sold / (units_sold + on_hand) * 100`. `capital_trapped` = purchase value of SKUs with sell_through < 20%.
 - **Errors:** 400 if no Bosta API key set; 502 if Bosta API unreachable or returns error
 
 ### PUT /stock-value/purchase-price

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Alert from '../components/Alert.jsx';
 
 export default function BrandPicker() {
-  const { login, userRole } = useAuth();
+  const { login, userRole, allowedBrandIds } = useAuth();
   const navigate = useNavigate();
 
   const [brands,       setBrands]       = useState([]);
@@ -85,8 +85,8 @@ export default function BrandPicker() {
           </p>
         </div>
 
-        {/* Admin overview link */}
-        {userRole === 'admin' && (
+        {/* Admin overview link — hidden for restricted admins (brand-limited accounts) */}
+        {userRole === 'admin' && !allowedBrandIds && (
           <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
             <button
               onClick={() => navigate('/admin')}

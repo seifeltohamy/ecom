@@ -29,6 +29,8 @@
 | role | Enum(UserRole) | not null, default=viewer |
 | name | String(128) | nullable |
 | brand_id | Integer | FK → brands.id, **nullable** (NULL = admin superuser) |
+| allowed_pages | Text | nullable — JSON array of allowed page paths, NULL = unrestricted |
+| read_only | Boolean | not null, default=false, server_default='false' *(added 0015)* |
 | created_at | DateTime | not null, default=utcnow |
 
 **Enum UserRole:** `admin`, `viewer`
@@ -209,6 +211,8 @@ db.query(models.AppSettings).filter(
 | 0011_add_indexes | alembic/versions/0011_add_indexes.py | 7 indexes: brand_id on cashflow_months/bosta_reports/cashflow_categories/products/users; bosta_reports.uploaded_at; cashflow_entries.created_at |
 | 0012_stock_purchase_prices | alembic/versions/0012_stock_purchase_prices.py | stock_purchase_prices table (brand_id, sku, purchase_price); unique on (brand_id, sku) |
 | 0013_sku_cost_items | alembic/versions/0013_sku_cost_items.py | sku_cost_items table (brand_id, sku, name, amount); unique on (brand_id, sku, name) |
+| 0014_user_permissions | alembic/versions/0014_user_permissions.py | users.allowed_pages TEXT (nullable JSON array of page paths) |
+| 0015_user_readonly | alembic/versions/0015_user_readonly.py | users.read_only Boolean NOT NULL DEFAULT false |
 
 **Run migrations (from project root with .env set):**
 ```bash
