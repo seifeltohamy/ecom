@@ -5,7 +5,7 @@ load_dotenv()
 
 from fastapi import FastAPI
 
-from app.routers import auth, cashflow, dashboard, products, settings, bosta
+from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi
 
 app = FastAPI(title="EcomHQ")
 
@@ -15,6 +15,7 @@ app.include_router(dashboard.router)
 app.include_router(products.router)
 app.include_router(settings.router)
 app.include_router(bosta.router)
+app.include_router(bi.router)
 
 
 # ── SPA / static file serving ─────────────────────────────────────────────────

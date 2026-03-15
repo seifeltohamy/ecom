@@ -158,3 +158,16 @@ class SkuCostItem(Base):
     amount   = Column(Float, nullable=False, default=0)
 
     __table_args__ = (UniqueConstraint("brand_id", "sku", "name", name="uq_sci_brand_sku_name"),)
+
+
+class BiInsight(Base):
+    __tablename__ = "bi_insights"
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id        = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    user_id         = Column(Integer, nullable=True)
+    question        = Column(Text, nullable=False)
+    answer          = Column(Text, nullable=False)
+    model           = Column(String(64), nullable=True)
+    prompt_tokens   = Column(Integer, nullable=True)
+    response_tokens = Column(Integer, nullable=True)
+    created_at      = Column(DateTime, default=datetime.utcnow, nullable=False)

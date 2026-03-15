@@ -16,6 +16,7 @@ import Settings     from './pages/Settings.jsx';
 import Users        from './pages/Users.jsx';
 import Categories   from './pages/Categories.jsx';
 import AdminPortal  from './pages/AdminPortal.jsx';
+import BI           from './pages/BI.jsx';
 
 const pageMeta = {
   '/':              { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
@@ -28,6 +29,7 @@ const pageMeta = {
   '/settings':      { title: 'Settings',        subtitle: 'Configure integrations and API keys.' },
   '/users':         { title: 'User Management', subtitle: 'Create and manage user accounts.' },
   '/admin':         { title: 'Admin Overview',  subtitle: 'Numbers across all brands.' },
+  '/bi':            { title: 'BI Assistant',    subtitle: 'Ask questions about your data.' },
 };
 
 // Pages that can be permission-controlled for viewer users (shown as checkboxes)
@@ -165,6 +167,7 @@ function Layout() {
           {canSee('/stock-value') && <NavLink to="/stock-value"     style={({ isActive }) => S.navItem(isActive)} onClick={close}>Stock Value</NavLink>}
           {canSee('/products')    && <NavLink to="/products"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>}
           {canSee('/categories')  && <NavLink to="/categories"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>}
+          <NavLink to="/bi" style={({ isActive }) => S.navItem(isActive)} onClick={close}>BI Assistant</NavLink>
           {userRole === 'admin' && (
             <NavLink to="/users" style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
           )}
@@ -229,6 +232,7 @@ export default function App() {
               <Route path="products"     element={<Products />} />
               <Route path="stock-value"  element={<StockValue />} />
               <Route path="categories"   element={<Categories />} />
+              <Route path="bi"           element={<BI />} />
               <Route path="settings"     element={<Settings />} />
               <Route path="users"        element={<Users />} />
             </Route>
