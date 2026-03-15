@@ -153,3 +153,27 @@ body {
   .zen-dist-row > :nth-child(2) { order: 3; }
   .zen-dist-row > :nth-child(3) { order: 2; text-align: left !important; }
 }
+
+
+/* ── BI Assistant ─────────────────────────────────────────────────────────── */
+@keyframes biDotBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+  30%           { transform: translateY(-6px); opacity: 1; }
+}
+
+.bi-answer p              { margin: 0 0 .65rem; line-height: 1.65; font-size: .9rem; color: var(--text); }
+.bi-answer p:last-child   { margin-bottom: 0; }
+.bi-answer strong         { color: var(--text); font-weight: 600; }
+.bi-answer ol,
+.bi-answer ul             { padding-left: 1.5rem; margin: .4rem 0 .7rem; }
+.bi-answer li             { margin-bottom: .4rem; line-height: 1.55; font-size: .9rem; color: var(--text); }
+.bi-answer code           { background: var(--surface2); border: 1px solid var(--border2); padding: .1em .35em; border-radius: 4px; font-size: .82em; font-family: monospace; }
+.bi-answer pre            { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .75rem 1rem; overflow-x: auto; margin: .5rem 0 .75rem; }
+.bi-answer pre code       { background: none; border: none; padding: 0; font-size: .85rem; }
+.bi-answer h1,
+.bi-answer h2,
+.bi-answer h3             { color: var(--text); margin: .85rem 0 .35rem; font-weight: 600; line-height: 1.3; }
+.bi-answer h1             { font-size: 1.1rem; }
+.bi-answer h2             { font-size: 1rem; }
+.bi-answer h3             { font-size: .95rem; }
+.bi-answer blockquote     { border-left: 3px solid var(--accent); padding-left: .75rem; color: var(--muted); margin: .5rem 0; }

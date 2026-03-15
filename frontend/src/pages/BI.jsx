@@ -1,17 +1,43 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { authFetch } from '../utils/auth.js';
 import { S } from '../styles.js';
 import Alert from '../components/Alert.jsx';
 import Card, { CardTitle } from '../components/Card.jsx';
 
+function ThinkingDots() {
+  return (
+    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', padding: '6px 0' }}>
+      {[0, 1, 2].map(i => (
+        <span key={i} style={{
+          width: 8, height: 8, borderRadius: '50%',
+          background: 'var(--muted)',
+          display: 'inline-block',
+          animation: 'biDotBounce .9s ease-in-out infinite',
+          animationDelay: `${i * 0.18}s`,
+        }} />
+      ))}
+    </span>
+  );
+}
+
+const LABEL = {
+  fontSize: '.75rem', fontWeight: 600,
+  textTransform: 'uppercase', letterSpacing: '.07em',
+  marginBottom: '.5rem',
+};
+
 export default function BI() {
-  const [history,   setHistory]   = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [asking,    setAsking]    = useState(false);
-  const [error,     setError]     = useState('');
-  const [question,  setQuestion]  = useState('');
-  const [selected,  setSelected]  = useState(null);   // { question, answer, created_at }
+  const [history,         setHistory]         = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [asking,          setAsking]          = useState(false);
+  const [error,           setError]           = useState('');
+  const [question,        setQuestion]        = useState('');
+  const [selected,        setSelected]        = useState(null);
+  const [pendingQuestion, setPendingQuestion] = useState('');
   const textareaRef = useRef(null);
+  const answerRef   = useRef(null);
 
   useEffect(() => {
     authFetch('/bi/history')
@@ -20,27 +46,37 @@ export default function BI() {
       .catch(() => { setError('Failed to load history.'); setLoading(false); });
   }, []);
 
+  useEffect(() => {
+    if (selected && answerRef.current) {
+      answerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selected?.id]);
+
   async function handleAsk(e) {
     e.preventDefault();
     if (!question.trim() || asking) return;
+    const q = question.trim();
     setAsking(true);
     setError('');
+    setSelected(null);
+    setPendingQuestion(q);
+    setQuestion('');
     try {
       const res = await authFetch('/bi/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question.trim() }),
+        body: JSON.stringify({ question: q }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.detail || 'Request failed.'); return; }
-      const entry = { id: data.id, question: question.trim(), answer: data.answer, created_at: data.created_at };
+      const entry = { id: data.id, question: q, answer: data.answer, created_at: data.created_at };
       setHistory(h => [entry, ...h]);
       setSelected(entry);
-      setQuestion('');
     } catch {
       setError('Request failed.');
     } finally {
       setAsking(false);
+      setPendingQuestion('');
     }
   }
 
@@ -56,6 +92,9 @@ export default function BI() {
     catch { return iso; }
   };
 
+  const showPending  = asking && pendingQuestion;
+  const showSelected = !asking && selected;
+
   return (
     <div>
       {loading && <Alert type="loading">Loading…</Alert>}
@@ -64,7 +103,7 @@ export default function BI() {
       {!loading && (
         <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1rem', alignItems: 'start' }}>
 
-          {/* History sidebar */}
+          {/* ── History sidebar ── */}
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '1rem 1rem .5rem', borderBottom: '1px solid var(--border)' }}>
               <CardTitle>History</CardTitle>
@@ -76,12 +115,14 @@ export default function BI() {
                 {history.map(h => (
                   <button
                     key={h.id}
-                    onClick={() => setSelected(h)}
+                    onClick={() => { setSelected(h); setAsking(false); setPendingQuestion(''); }}
                     style={{
                       display: 'block', width: '100%', textAlign: 'left',
-                      padding: '.75rem 1rem', background: selected?.id === h.id ? 'var(--surface2)' : 'none',
+                      padding: '.75rem 1rem',
+                      background: selected?.id === h.id ? 'var(--surface2)' : 'none',
                       border: 'none', borderBottom: '1px solid var(--border)',
                       color: 'var(--text)', cursor: 'pointer',
+                      transition: 'background .15s',
                     }}
                   >
                     <div style={{ fontSize: '.83rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -96,29 +137,32 @@ export default function BI() {
             )}
           </Card>
 
-          {/* Chat panel */}
+          {/* ── Chat panel ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-            {/* Selected Q/A */}
-            {selected && (
-              <Card>
-                <div style={{
-                  fontSize: '.78rem', color: 'var(--accent)', fontWeight: 600,
-                  textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.5rem',
-                }}>You</div>
-                <p style={{ marginBottom: '1rem', color: 'var(--text)' }}>{selected.question}</p>
-                <div style={{
-                  fontSize: '.78rem', color: 'var(--muted)', fontWeight: 600,
-                  textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.5rem',
-                }}>Assistant</div>
-                <pre style={{
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  fontFamily: 'inherit', fontSize: '.9rem',
-                  color: 'var(--text)', margin: 0,
-                }}>
-                  {selected.answer}
-                </pre>
+            {/* Q/A card — pending (thinking) or selected */}
+            {(showPending || showSelected) && (
+              <div ref={answerRef}>
+              <Card style={{ animation: 'fadeIn .25s ease' }}>
+                <div style={{ ...LABEL, color: 'var(--accent)' }}>You</div>
+                <p style={{ marginBottom: '1.25rem', color: 'var(--text)', lineHeight: 1.6, fontSize: '.95rem' }}>
+                  {showPending ? pendingQuestion : selected.question}
+                </p>
+
+                <div style={{ borderTop: '1px solid var(--border)', marginBottom: '1.25rem' }} />
+
+                <div style={{ ...LABEL, color: 'var(--muted)' }}>Assistant</div>
+                {showPending ? (
+                  <ThinkingDots />
+                ) : (
+                  <div className="bi-answer" style={{ animation: 'fadeIn .3s ease' }}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {selected.answer}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </Card>
+              </div>
             )}
 
             {/* Composer */}
@@ -135,17 +179,27 @@ export default function BI() {
                     width: '100%', boxSizing: 'border-box',
                     background: 'var(--surface2)', border: '1px solid var(--border2)',
                     borderRadius: 'var(--radius-sm)', color: 'var(--text)',
-                    padding: '.6rem .75rem', fontSize: '.9rem',
+                    padding: '.65rem .85rem', fontSize: '.9rem',
                     resize: 'vertical', outline: 'none', fontFamily: 'inherit',
+                    transition: 'border-color .15s',
                   }}
+                  onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                  onBlur={e  => e.target.style.borderColor = 'var(--border2)'}
                 />
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '.75rem' }}>
+                  {asking && (
+                    <span style={{ fontSize: '.8rem', color: 'var(--muted)' }}>Thinking…</span>
+                  )}
                   <button
                     type="submit"
                     disabled={asking || !question.trim()}
-                    style={{ ...S.btnBase, ...S.btnPrimary, opacity: (asking || !question.trim()) ? .5 : 1 }}
+                    style={{
+                      ...S.btnBase, ...S.btnPrimary,
+                      opacity: (asking || !question.trim()) ? .45 : 1,
+                      transition: 'opacity .15s',
+                    }}
                   >
-                    {asking ? 'Thinking…' : 'Ask'}
+                    Ask
                   </button>
                 </div>
               </form>
