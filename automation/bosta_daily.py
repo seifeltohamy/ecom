@@ -64,7 +64,7 @@ def trigger_bosta_export(email: str, password: str) -> None:
     """Login to business.bosta.co, click Successful tab, click Export.
     Bosta sends the Excel file to the email inbox — no direct download here."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         ctx = browser.new_context()
         page = ctx.new_page()
 
@@ -75,7 +75,7 @@ def trigger_bosta_export(email: str, password: str) -> None:
         page.fill('input[type="email"], input[name="email"]', email)
         page.fill('input[type="password"], input[name="password"]', password)
         page.click('button[type="submit"]')
-        page.wait_for_url("**/overview**", timeout=20000)
+        page.wait_for_url("**/overview**", timeout=60000)
         page.wait_for_load_state("networkidle")
 
         log.info("  Navigating to orders page…")
@@ -83,7 +83,7 @@ def trigger_bosta_export(email: str, password: str) -> None:
         page.wait_for_load_state("networkidle")
 
         log.info("  Clicking Successful tab (تم بنجاح)…")
-        page.click('text=تم بنجاح', timeout=15000)
+        page.click('text=تم بنجاح', timeout=30000)
         page.wait_for_load_state("networkidle")
 
         log.info("  Clicking Export (تحميل)…")
