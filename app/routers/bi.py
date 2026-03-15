@@ -115,7 +115,9 @@ def ask_bi(
         "You are a business intelligence assistant for an e-commerce brand. "
         "Answer only using the provided data snapshot. "
         "If the data is insufficient to answer, say so clearly. "
-        "Be concise and actionable."
+        "Be concise and actionable. "
+        "All monetary values are in Egyptian Pounds (EGP). "
+        "Always display amounts with the EGP symbol or suffix (e.g. 149,654 EGP)."
     )
     user_content = (
         f"Data snapshot:\n{json.dumps(snapshot, indent=2)}\n\n"
