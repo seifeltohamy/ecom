@@ -75,8 +75,8 @@ def trigger_bosta_export(email: str, password: str) -> None:
         page.fill('input[type="email"], input[name="email"]', email)
         page.fill('input[type="password"], input[name="password"]', password)
         page.click('button[type="submit"]')
-        page.wait_for_url("**/overview**", timeout=60000)
-        page.wait_for_load_state("networkidle")
+        # Wait for any post-login navigation to settle (don't pin to a specific URL)
+        page.wait_for_load_state("networkidle", timeout=60000)
 
         log.info("  Navigating to orders page…")
         page.goto("https://business.bosta.co/orders")
