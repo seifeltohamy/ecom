@@ -12,11 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev && rm
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+RUN playwright install --with-deps chromium
 COPY main.py ./
 COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
+COPY automation/bosta_daily.py ./automation/bosta_daily.py
 COPY start_prod.sh ./
 RUN chmod +x start_prod.sh
 ENV PORT=8000
