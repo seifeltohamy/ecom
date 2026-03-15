@@ -42,6 +42,7 @@ export const PERMISSIONED_PAGES = [
   { path: '/products',    label: 'Products'     },
   { path: '/categories',  label: 'Categories'   },
   { path: '/settings',    label: 'Settings'     },
+  { path: '/bi',          label: 'BI Assistant' },
 ];
 
 function SwitchBrandButton({ close }) {
@@ -167,7 +168,7 @@ function Layout() {
           {canSee('/stock-value') && <NavLink to="/stock-value"     style={({ isActive }) => S.navItem(isActive)} onClick={close}>Stock Value</NavLink>}
           {canSee('/products')    && <NavLink to="/products"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>}
           {canSee('/categories')  && <NavLink to="/categories"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>}
-          <NavLink to="/bi" style={({ isActive }) => S.navItem(isActive)} onClick={close}>BI Assistant</NavLink>
+          {canSee('/bi')          && <NavLink to="/bi"            style={({ isActive }) => S.navItem(isActive)} onClick={close}>BI Assistant</NavLink>}
           {userRole === 'admin' && (
             <NavLink to="/users" style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
           )}
