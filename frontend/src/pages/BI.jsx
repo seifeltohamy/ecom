@@ -36,8 +36,8 @@ export default function BI() {
   const [question,        setQuestion]        = useState('');
   const [selected,        setSelected]        = useState(null);
   const [pendingQuestion, setPendingQuestion] = useState('');
-  const textareaRef = useRef(null);
-  const answerRef   = useRef(null);
+  const textareaRef  = useRef(null);
+  const chatBodyRef  = useRef(null);
 
   useEffect(() => {
     authFetch('/bi/history')
@@ -46,11 +46,12 @@ export default function BI() {
       .catch(() => { setError('Failed to load history.'); setLoading(false); });
   }, []);
 
+  // Scroll chat body to bottom when new content appears
   useEffect(() => {
-    if (selected && answerRef.current) {
-      answerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
     }
-  }, [selected?.id]);
+  }, [selected?.id, asking]);
 
   async function handleAsk(e) {
     e.preventDefault();
@@ -87,6 +88,15 @@ export default function BI() {
     }
   }
 
+  function handleNewChat() {
+    setSelected(null);
+    setPendingQuestion('');
+    setAsking(false);
+    setError('');
+    setQuestion('');
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  }
+
   const fmtDate = (iso) => {
     try { return new Date(iso).toLocaleString('en-EG', { dateStyle: 'medium', timeStyle: 'short' }); }
     catch { return iso; }
@@ -96,23 +106,45 @@ export default function BI() {
   const showSelected = !asking && selected;
 
   return (
-    <div>
-      {loading && <Alert type="loading">Loading…</Alert>}
-      {error   && <Alert type="error">{error}</Alert>}
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 150px)' }}>
 
-      {!loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1rem', alignItems: 'start' }}>
+      {/* Top bar: New Chat button */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '.75rem', flexShrink: 0 }}>
+        <button
+          onClick={handleNewChat}
+          style={{
+            ...S.btnBase, ...S.btnOutline,
+            display: 'flex', alignItems: 'center', gap: '.4rem', fontSize: '.85rem',
+          }}
+        >
+          <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> New Chat
+        </button>
+      </div>
+
+      {error && <div style={{ flexShrink: 0, marginBottom: '.5rem' }}><Alert type="error">{error}</Alert></div>}
+
+      {loading ? (
+        <Alert type="loading">Loading…</Alert>
+      ) : (
+        <div style={{
+          display: 'grid', gridTemplateColumns: '260px 1fr',
+          gap: '1rem', flex: 1, overflow: 'hidden',
+        }}>
 
           {/* ── History sidebar ── */}
-          <Card style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '1rem 1rem .5rem', borderBottom: '1px solid var(--border)' }}>
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)', overflow: 'hidden',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{ padding: '1rem 1rem .6rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <CardTitle>History</CardTitle>
             </div>
-            {history.length === 0 ? (
-              <p style={{ padding: '1rem', color: 'var(--muted)', fontSize: '.85rem' }}>No questions yet.</p>
-            ) : (
-              <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                {history.map(h => (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {history.length === 0 ? (
+                <p style={{ padding: '1rem', color: 'var(--muted)', fontSize: '.85rem' }}>No questions yet.</p>
+              ) : (
+                history.map(h => (
                   <button
                     key={h.id}
                     onClick={() => { setSelected(h); setAsking(false); setPendingQuestion(''); }}
@@ -132,78 +164,88 @@ export default function BI() {
                       {fmtDate(h.created_at)}
                     </div>
                   </button>
-                ))}
-              </div>
-            )}
-          </Card>
+                ))
+              )}
+            </div>
+          </div>
 
           {/* ── Chat panel ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', gap: '.75rem' }}>
 
-            {/* Q/A card — pending (thinking) or selected */}
-            {(showPending || showSelected) && (
-              <div ref={answerRef}>
-              <Card style={{ animation: 'fadeIn .25s ease' }}>
-                <div style={{ ...LABEL, color: 'var(--accent)' }}>You</div>
-                <p style={{ marginBottom: '1.25rem', color: 'var(--text)', lineHeight: 1.6, fontSize: '.95rem' }}>
-                  {showPending ? pendingQuestion : selected.question}
-                </p>
+            {/* Scrollable Q/A area */}
+            <div ref={chatBodyRef} style={{ flex: 1, overflowY: 'auto', paddingRight: '.25rem' }}>
+              {(showPending || showSelected) ? (
+                <Card style={{ animation: 'fadeIn .25s ease' }}>
+                  <div style={{ ...LABEL, color: 'var(--accent)' }}>You</div>
+                  <p style={{ marginBottom: '1.25rem', color: 'var(--text)', lineHeight: 1.6, fontSize: '.95rem' }}>
+                    {showPending ? pendingQuestion : selected.question}
+                  </p>
 
-                <div style={{ borderTop: '1px solid var(--border)', marginBottom: '1.25rem' }} />
+                  <div style={{ borderTop: '1px solid var(--border)', marginBottom: '1.25rem' }} />
 
-                <div style={{ ...LABEL, color: 'var(--muted)' }}>Assistant</div>
-                {showPending ? (
-                  <ThinkingDots />
-                ) : (
-                  <div className="bi-answer" style={{ animation: 'fadeIn .3s ease' }}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {selected.answer}
-                    </ReactMarkdown>
-                  </div>
-                )}
-              </Card>
-              </div>
-            )}
-
-            {/* Composer */}
-            <Card>
-              <form onSubmit={handleAsk} style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
-                <textarea
-                  ref={textareaRef}
-                  value={question}
-                  onChange={e => setQuestion(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask a question about your data… (Enter to send)"
-                  rows={3}
-                  style={{
-                    width: '100%', boxSizing: 'border-box',
-                    background: 'var(--surface2)', border: '1px solid var(--border2)',
-                    borderRadius: 'var(--radius-sm)', color: 'var(--text)',
-                    padding: '.65rem .85rem', fontSize: '.9rem',
-                    resize: 'vertical', outline: 'none', fontFamily: 'inherit',
-                    transition: 'border-color .15s',
-                  }}
-                  onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-                  onBlur={e  => e.target.style.borderColor = 'var(--border2)'}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '.75rem' }}>
-                  {asking && (
-                    <span style={{ fontSize: '.8rem', color: 'var(--muted)' }}>Thinking…</span>
+                  <div style={{ ...LABEL, color: 'var(--muted)' }}>Assistant</div>
+                  {showPending ? (
+                    <ThinkingDots />
+                  ) : (
+                    <div className="bi-answer" style={{ animation: 'fadeIn .3s ease' }}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {selected.answer}
+                      </ReactMarkdown>
+                    </div>
                   )}
-                  <button
-                    type="submit"
-                    disabled={asking || !question.trim()}
-                    style={{
-                      ...S.btnBase, ...S.btnPrimary,
-                      opacity: (asking || !question.trim()) ? .45 : 1,
-                      transition: 'opacity .15s',
-                    }}
-                  >
-                    Ask
-                  </button>
+                </Card>
+              ) : (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  height: '100%', color: 'var(--muted)', fontSize: '.9rem', flexDirection: 'column', gap: '.5rem',
+                }}>
+                  <span style={{ fontSize: '2rem' }}>💬</span>
+                  <span>Ask anything about your data</span>
                 </div>
-              </form>
-            </Card>
+              )}
+            </div>
+
+            {/* Composer — pinned at bottom */}
+            <div style={{ flexShrink: 0 }}>
+              <Card>
+                <form onSubmit={handleAsk} style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
+                  <textarea
+                    ref={textareaRef}
+                    value={question}
+                    onChange={e => setQuestion(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Ask a question about your data… (Enter to send)"
+                    rows={3}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      background: 'var(--surface2)', border: '1px solid var(--border2)',
+                      borderRadius: 'var(--radius-sm)', color: 'var(--text)',
+                      padding: '.65rem .85rem', fontSize: '.9rem',
+                      resize: 'none', outline: 'none', fontFamily: 'inherit',
+                      transition: 'border-color .15s',
+                    }}
+                    onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+                    onBlur={e  => e.target.style.borderColor = 'var(--border2)'}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '.75rem' }}>
+                    {asking && (
+                      <span style={{ fontSize: '.8rem', color: 'var(--muted)' }}>Thinking…</span>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={asking || !question.trim()}
+                      style={{
+                        ...S.btnBase, ...S.btnPrimary,
+                        opacity: (asking || !question.trim()) ? .45 : 1,
+                        transition: 'opacity .15s',
+                      }}
+                    >
+                      Ask
+                    </button>
+                  </div>
+                </form>
+              </Card>
+            </div>
           </div>
         </div>
       )}
