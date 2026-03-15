@@ -67,22 +67,26 @@ def trigger_bosta_export(email: str, password: str) -> None:
         browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         ctx = browser.new_context()
         page = ctx.new_page()
+        page.set_default_timeout(60000)  # 60s for all actions
 
         log.info("  Navigating to Bosta signin…")
-        page.goto("https://business.bosta.co/signin")
+        page.goto("https://business.bosta.co/signin", timeout=60000)
         page.wait_for_load_state("networkidle")
 
         page.fill('input[type="email"], input[name="email"]', email)
         page.fill('input[type="password"], input[name="password"]', password)
         page.click('button[type="submit"]')
-        # Wait for any post-login navigation to settle (don't pin to a specific URL)
-        page.wait_for_load_state("networkidle", timeout=60000)
+        page.wait_for_url("**/overview**", timeout=60000)
+        page.wait_for_load_state("networkidle")
+        log.info(f"  Logged in — current URL: {page.url}")
 
         log.info("  Navigating to orders page…")
-        page.goto("https://business.bosta.co/orders")
+        page.goto("https://business.bosta.co/orders", timeout=60000)
         page.wait_for_load_state("networkidle")
+        log.info(f"  Orders page loaded — current URL: {page.url}")
 
         log.info("  Clicking Successful tab (تم بنجاح)…")
+        page.wait_for_selector('text=تم بنجاح', state='visible', timeout=30000)
         page.click('text=تم بنجاح', timeout=30000)
         page.wait_for_load_state("networkidle")
 
@@ -112,23 +116,31 @@ def fetch_export_from_email(gmail_user: str, gmail_app_password: str,
     while time.time() < deadline:
         # Re-select inbox each iteration to refresh
         mail.select("inbox")
-        _, msgs = mail.search(None, 'FROM "no-reply@bosta.co" SUBJECT "Export"')
+
+        # Broad search — just FROM bosta.co, no subject filter
+        _, msgs = mail.search(None, 'FROM "bosta.co"')
         ids = msgs[0].split()
+        log.info(f"  IMAP: {len(ids)} email(s) from bosta.co found")
+
         if ids:
-            # Check most recent emails first (reversed)
-            for msg_id in reversed(ids[-5:]):
+            # Check most recent 10 emails first
+            for msg_id in reversed(ids[-10:]):
                 _, data = mail.fetch(msg_id, "(RFC822)")
                 msg = email_lib.message_from_bytes(data[0][1])
 
-                # Only use emails that arrived after we triggered the export
+                subject  = msg.get("Subject", "")
+                sender   = msg.get("From", "")
                 date_str = msg.get("Date", "")
                 try:
                     msg_time = email.utils.parsedate_to_datetime(date_str).timestamp()
                 except Exception:
                     msg_time = 0
 
+                log.info(f"  Email: from={sender} | subject={subject} | age={int(time.time()-msg_time)}s")
+
+                # Only use emails that arrived after we triggered the export
                 if msg_time < triggered_at - 60:
-                    continue  # older email, skip
+                    continue
 
                 # Extract download link from body
                 body = ""
