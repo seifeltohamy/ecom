@@ -177,3 +177,17 @@ body {
 .bi-answer h2             { font-size: 1rem; }
 .bi-answer h3             { font-size: .95rem; }
 .bi-answer blockquote     { border-left: 3px solid var(--accent); padding-left: .75rem; color: var(--muted); margin: .5rem 0; }
+
+/* BI layout */
+.bi-layout          { display: grid; grid-template-columns: 260px 1fr; gap: 1rem; flex: 1; overflow: hidden; }
+.bi-sidebar         { display: flex; flex-direction: column; }
+.bi-history-toggle  { display: none; }
+
+@media (max-width: 700px) {
+  .bi-layout         { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .bi-sidebar        { display: none; max-height: 40vh; }
+  .bi-sidebar.open   { display: flex; }
+  .bi-history-toggle { display: flex; }
+  .bi-page           { height: calc(100dvh - 200px) !important; }
+  .bi-user-bubble    { max-width: 88% !important; }
+}

@@ -35,7 +35,8 @@ export default function BI() {
   const [error,     setError]     = useState('');
   const [question,  setQuestion]  = useState('');
   // messages = [{role:'user'|'assistant', text, id?, created_at?, pending?}]
-  const [messages,  setMessages]  = useState([]);
+  const [messages,     setMessages]     = useState([]);
+  const [showHistory,  setShowHistory]  = useState(false);
   const textareaRef = useRef(null);
   const bottomRef   = useRef(null);
 
@@ -104,6 +105,7 @@ export default function BI() {
     setError('');
     setAsking(false);
     setQuestion('');
+    setShowHistory(false);
   }
 
   const fmtDate = (iso) => {
@@ -115,10 +117,17 @@ export default function BI() {
   const activeId = messages.findLast?.(m => m.role === 'assistant' && !String(m.id).startsWith('u-'))?.id ?? null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 150px)' }}>
+    <div className="bi-page" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 150px)' }}>
 
       {/* Top bar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '.75rem', flexShrink: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.75rem', flexShrink: 0 }}>
+        <button
+          className="bi-history-toggle"
+          onClick={() => setShowHistory(v => !v)}
+          style={{ ...S.btnBase, ...S.btnOutline, alignItems: 'center', gap: '.4rem', fontSize: '.85rem' }}
+        >
+          {showHistory ? '✕ Close' : '☰ History'}
+        </button>
         <button
           onClick={handleNewChat}
           style={{ ...S.btnBase, ...S.btnOutline, display: 'flex', alignItems: 'center', gap: '.4rem', fontSize: '.85rem' }}
@@ -132,13 +141,12 @@ export default function BI() {
       {loading ? (
         <Alert type="loading">Loading…</Alert>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1rem', flex: 1, overflow: 'hidden' }}>
+        <div className="bi-layout">
 
           {/* ── History sidebar ── */}
-          <div style={{
+          <div className={`bi-sidebar${showHistory ? ' open' : ''}`} style={{
             background: 'var(--surface)', border: '1px solid var(--border)',
             borderRadius: 'var(--radius)', overflow: 'hidden',
-            display: 'flex', flexDirection: 'column',
           }}>
             <div style={{ padding: '1rem 1rem .6rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <CardTitle>History</CardTitle>
@@ -193,7 +201,7 @@ export default function BI() {
                     {msg.role === 'user' ? (
                       /* User bubble */
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <div style={{
+                        <div className="bi-user-bubble" style={{
                           maxWidth: '70%',
                           background: 'var(--accent)',
                           color: '#fff',
