@@ -81,7 +81,7 @@ export default function BI() {
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter') {
       e.preventDefault();
       handleAsk(e);
     }
@@ -173,7 +173,7 @@ export default function BI() {
                   value={question}
                   onChange={e => setQuestion(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask a question about your data… (Enter to send, Shift+Enter for newline)"
+                  placeholder="Ask a question about your data… (Enter to send)"
                   rows={3}
                   style={{
                     width: '100%', boxSizing: 'border-box',
