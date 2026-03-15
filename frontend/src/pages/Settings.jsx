@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { authFetch } from '../utils/auth.js';
-import { S } from '../styles.js';
+import { useAuth } from '../context/AuthContext.jsx';
 import Card, { CardTitle } from '../components/Card.jsx';
 import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
@@ -18,6 +18,7 @@ const labelStyle = {
 };
 
 export default function Settings() {
+  const { brandName } = useAuth();
   const [apiKey,              setApiKey]              = useState('');
   const [bostaEmail,          setBostaEmail]          = useState('');
   const [bostaPassword,       setBostaPassword]       = useState('');
@@ -37,8 +38,9 @@ export default function Settings() {
         setBostaEmail(d.bosta_email || '');
         setBostaPassword(d.bosta_password || '');
         setBostaEmailPassword(d.bosta_email_password || '');
-        setLoading(false);
-      });
+      })
+      .catch(() => setMsg({ type: 'error', text: 'Failed to load settings.' }))
+      .finally(() => setLoading(false));
   }, []);
 
   async function save() {
@@ -79,8 +81,19 @@ export default function Settings() {
       {msg && <Alert type={msg.type} onClose={() => setMsg(null)}>{msg.text}</Alert>}
 
       <Card>
-        <CardTitle>Bosta Integration</CardTitle>
-        <p style={{ color: 'var(--muted)', fontSize: '.9rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0' }}>
+          <CardTitle>Bosta Integration</CardTitle>
+          {brandName && (
+            <span style={{
+              fontSize: '.78rem', fontWeight: 600, color: 'var(--accent)',
+              background: 'rgba(249,115,22,.1)', border: '1px solid rgba(249,115,22,.25)',
+              borderRadius: '20px', padding: '.2rem .65rem',
+            }}>
+              {brandName}
+            </span>
+          )}
+        </div>
+        <p style={{ color: 'var(--muted)', fontSize: '.9rem', marginBottom: '1.5rem', marginTop: '.5rem' }}>
           Configure your Bosta credentials to enable live stock value fetching and daily automation.
         </p>
 
