@@ -11,6 +11,7 @@ Called:
 """
 
 import email as email_lib
+import email.header
 import email.utils
 import imaplib
 import logging
@@ -112,7 +113,16 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
             _, data = mail.fetch(msg_id, "(RFC822)")
             msg = email_lib.message_from_bytes(data[0][1])
 
-            subject = msg.get("Subject", "")
+            # Decode RFC 2047 encoded subject (e.g. =?UTF-8?B?...?=)
+            raw_subject = msg.get("Subject", "")
+            parts = email.header.decode_header(raw_subject)
+            subject = ""
+            for part, enc in parts:
+                if isinstance(part, bytes):
+                    subject += part.decode(enc or "utf-8", errors="ignore")
+                else:
+                    subject += part
+            logger.info("Brand %s: email subject: %r", brand_id, subject)
             if "Cashout" not in subject and "cashout" not in subject:
                 continue
 

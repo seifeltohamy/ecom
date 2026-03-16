@@ -93,7 +93,7 @@ export default function Cashflow() {
         const updated = await authFetch('/cashflow/sms-suggestions').then(r => r.json());
         if (Array.isArray(updated)) { setSuggestions(updated); setShowSuggestions(true); }
       } else {
-        alert(`No new payouts found (${data.emails_found} email${data.emails_found !== 1 ? 's' : ''} checked).`);
+        alert(`No new payouts found.\n${data.emails_found} Bosta email${data.emails_found !== 1 ? 's' : ''} from the last 2 days — none were Cashout receipts or already added.`);
       }
     } catch (e) {
       alert(`Error: ${e.message}`);
