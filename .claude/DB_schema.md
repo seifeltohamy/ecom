@@ -194,6 +194,27 @@ db.query(models.AppSettings).filter(
 
 ---
 
+### `sms_suggestions` *(added migration 0017, extended 0018)*
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | Integer | PK, autoincrement |
+| brand_id | Integer | FK → brands.id CASCADE, not null, index |
+| raw_text | Text | nullable |
+| amount | Float | not null |
+| description | String(256) | nullable |
+| ref_number | String(64) | nullable |
+| tx_date | DateTime | nullable |
+| type | String(8) | not null, default='out' — `'in'` or `'out'` *(added 0018)* |
+| category | String(128) | nullable — pre-assigned category e.g. "Bosta" *(added 0018)* |
+| status | String(16) | not null, default='pending' — `'pending'`/`'accepted'`/`'dismissed'` |
+| created_at | DateTime | not null |
+
+**Unique constraint:** `(brand_id, ref_number)` — named `uq_sms_brand_ref`
+**Indexes:** `ix_sms_suggestions_brand_id`, `ix_sms_suggestions_status`
+**Note:** SMS suggestions have `type='out'`, `category=NULL`. Bosta payout suggestions have `type='in'`, `category='Bosta'`.
+
+---
+
 ## Migrations
 
 | Revision | File | Description |
@@ -213,6 +234,9 @@ db.query(models.AppSettings).filter(
 | 0013_sku_cost_items | alembic/versions/0013_sku_cost_items.py | sku_cost_items table (brand_id, sku, name, amount); unique on (brand_id, sku, name) |
 | 0014_user_permissions | alembic/versions/0014_user_permissions.py | users.allowed_pages TEXT (nullable JSON array of page paths) |
 | 0015_user_readonly | alembic/versions/0015_user_readonly.py | users.read_only Boolean NOT NULL DEFAULT false |
+| 0016_bi_insights | alembic/versions/0016_bi_insights.py | bi_insights table (brand_id, user_id, question, answer, model, tokens, created_at) |
+| 0017_sms_suggestions | alembic/versions/0017_sms_suggestions.py | sms_suggestions table (brand_id, raw_text, amount, description, ref_number, tx_date, status, created_at); unique (brand_id, ref_number) |
+| 0018_sms_suggestion_type | alembic/versions/0018_sms_suggestion_type.py | sms_suggestions.type VARCHAR(8) DEFAULT 'out' + sms_suggestions.category VARCHAR(128) nullable |
 
 **Run migrations (from project root with .env set):**
 ```bash

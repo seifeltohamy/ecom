@@ -115,6 +115,6 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-16): BI Assistant fully rebuilt — Gemini 2.5 Flash, chat-style accumulating messages, markdown rendering, thinking animation, live stock inventory in snapshot, EGP currency, mobile responsive, permission-controlled. Settings page shows brand badge + error handling fix. All migrations through 0016 applied and deployed.
+Last session (2026-03-17): Bank SMS suggestions fully working (route fix, debit card format, dismiss confirm). Bosta payout email feature — Gmail IMAP every 4h + manual button, Money In suggestions with "Bosta" pre-assigned, migration 0018. All migrations through 0018 applied locally; deploy via Railway.
 Env var `GEMINI_API_KEY` must be set in Railway dashboard for BI to work.
-Pending: frontend read-only UI enforcement (disable write buttons when isReadOnly), password change, cashflow CSV export.
+Pending: Bosta payout subject decode re-test, iOS Shortcut empty body (keep "Ask Before Running" ON), password change, cashflow CSV export.

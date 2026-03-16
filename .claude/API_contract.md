@@ -357,6 +357,45 @@
 
 ---
 
+## SMS & Bosta Payout Suggestions *(brand-scoped)*
+
+### POST /sms/intake?token=xxx
+- **Auth:** No JWT — token-gated (token stored in `app_settings` key `sms_webhook_token`)
+- **Body:** JSON — `{ body: string }` — raw SMS text from iOS Shortcut
+- **Behavior:** Calls `parse_cib_sms()` — handles Instant Transfer, IPN Transfer, Debit Card Purchase; creates `SmsSuggestion` with `type='out'`; dedup by `ref_number`
+- **Response:** `{ ok, id, parsed }` on success; `{ ok: false, reason: "unrecognised", received: "..." }` if parser fails; `{ ok: true, duplicate: true, id }` if already exists
+- **Errors:** 403 if token invalid
+
+### GET /sms/token
+- **Auth:** Bearer + require_admin + brand in JWT
+- **Response:** `{ token, intake_url }`
+
+### POST /sms/token/regenerate
+- **Auth:** Bearer + require_admin + brand in JWT
+- **Response:** `{ token, intake_url }`
+
+### POST /sms/check-bosta-payouts
+- **Auth:** Bearer + require_admin + brand in JWT
+- **Behavior:** Connects to Gmail IMAP, searches `FROM no-reply@bosta.co SUBJECT "Cashout"` last 2 days; parses amount (Arabic-Indic numerals) + invoice number; creates `type='in'`, `category='Bosta'` suggestions; dedup by invoice ref_number
+- **Response:** `{ ok: true, emails_found: int, new: int, error: string|null }`
+
+### GET /cashflow/sms-suggestions
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** `[{ id, amount, description, ref_number, tx_date, created_at, type, category }]` — pending only, newest first
+
+### POST /cashflow/sms-suggestions/{id}/accept
+- **Auth:** Bearer + require_writable + brand in JWT
+- **Body:** `{ month: string, category: string, notes: string, amount: float|null }`
+- **Behavior:** Creates `CashflowEntry` using `suggestion.type` and `body.category || suggestion.category`; marks suggestion `accepted`
+- **Response:** `{ ok: true, entry_id }`
+
+### POST /cashflow/sms-suggestions/{id}/dismiss
+- **Auth:** Bearer (any role) + brand in JWT
+- **Behavior:** Sets `status='dismissed'` — row kept in DB
+- **Response:** `{ ok: true }`
+
+---
+
 ## Debug
 
 ### POST /debug-upload
