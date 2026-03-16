@@ -40,14 +40,23 @@ def parse_cib_sms(text: str) -> dict | None:
         return None
     amount = float(raw.group(1).replace(',', ''))
 
-    # ── Date (DD-MM-YYYY HH:MM) ───────────────────────────────────────────────
-    m_date = re.search(r'بتاريخ\s*(\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2})', text)
-    if m_date:
+    # ── Date ─────────────────────────────────────────────────────────────────
+    # Format 1: بتاريخ DD-MM-YYYY HH:MM  (instant transfer)
+    # Format 2: في DD/MM/YY HH:MM        (card purchase)
+    tx_date = None
+    m_date1 = re.search(r'بتاريخ\s*(\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2})', text)
+    m_date2 = re.search(r'في\s+(\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2})', text)
+    if m_date1:
         try:
-            tx_date = datetime.strptime(m_date.group(1).strip(), "%d-%m-%Y %H:%M")
+            tx_date = datetime.strptime(m_date1.group(1).strip(), "%d-%m-%Y %H:%M")
         except ValueError:
-            tx_date = datetime.utcnow()
-    else:
+            pass
+    elif m_date2:
+        try:
+            tx_date = datetime.strptime(m_date2.group(1).strip(), "%d/%m/%y %H:%M")
+        except ValueError:
+            pass
+    if tx_date is None:
         tx_date = datetime.utcnow()
 
     # ── Ref ───────────────────────────────────────────────────────────────────
@@ -58,9 +67,12 @@ def parse_cib_sms(text: str) -> dict | None:
     if 'EGP' in text and 'إلى' in text:       # IPN transfer
         m = re.search(r'إلى\s+(.+?)\s+برقم', text)
         desc = f"تحويل إلى {m.group(1).strip()}" if m else "IPN Transfer"
-    elif 'شراء' in text:                        # Purchase
+    elif 'شراء' in text:                        # Purchase (Arabic purchase keyword)
         m = re.search(r'جم من\s+(.+?)\s+برقم', text)
         desc = f"شراء من {m.group(1).strip()}" if m else "Purchase"
+    elif 'عند' in text:                         # Card purchase (debit card at merchant)
+        m = re.search(r'عند\s+(.+?)\s+في', text)
+        desc = f"شراء من {m.group(1).strip()}" if m else "Card Purchase"
     else:                                        # Instant transfer
         desc = "تحويل لحظي"
 
