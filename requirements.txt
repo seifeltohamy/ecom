@@ -11,3 +11,4 @@ bcrypt
 aiofiles
 httpx
 playwright
+apscheduler

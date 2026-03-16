@@ -4,10 +4,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi
+from app.stock_alert import run_stock_alert_job
 
 app = FastAPI(title="EcomHQ")
+
+# ── Stock alert scheduler (09:00 + 18:00 UTC daily) ───────────────────────────
+_scheduler = BackgroundScheduler(timezone="UTC")
+_scheduler.add_job(run_stock_alert_job, CronTrigger(hour=9,  minute=0))
+_scheduler.add_job(run_stock_alert_job, CronTrigger(hour=18, minute=0))
+_scheduler.start()
 
 app.include_router(auth.router)
 app.include_router(cashflow.router)
