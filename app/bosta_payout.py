@@ -11,6 +11,7 @@ Called:
 """
 
 import email as email_lib
+import email.utils
 import imaplib
 import logging
 import re
@@ -142,7 +143,13 @@ def check_bosta_payout_emails(brand_id: int, db) -> int:
                 continue
 
             invoice = _parse_invoice(body_text)
-            tx_date = _parse_tx_date(body_text)
+
+            # Use the email's Date header for exact send timestamp
+            date_str = msg.get("Date", "")
+            try:
+                tx_date = email.utils.parsedate_to_datetime(date_str).replace(tzinfo=None)
+            except Exception:
+                tx_date = _parse_tx_date(body_text)
 
             # Dedup by invoice number if we have one
             if invoice:
