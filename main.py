@@ -18,13 +18,13 @@ _scheduler.add_job(run_stock_alert_job, CronTrigger(minute=0))  # checks every h
 _scheduler.start()
 
 app.include_router(auth.router)
+app.include_router(sms.router)      # must be before cashflow (avoids /cashflow/{month} swallowing /cashflow/sms-suggestions)
 app.include_router(cashflow.router)
 app.include_router(dashboard.router)
 app.include_router(products.router)
 app.include_router(settings.router)
 app.include_router(bosta.router)
 app.include_router(bi.router)
-app.include_router(sms.router)
 
 
 # ── SPA / static file serving ─────────────────────────────────────────────────
