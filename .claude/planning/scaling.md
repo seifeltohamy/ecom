@@ -1,42 +1,32 @@
 # Plan: Scale Safely — Isolation, Performance & Reliability
 
-## Context
+## Status
 
-The app now has multiple brands in production. A full audit revealed issues that will cause real problems as brand count and data grow: a security gap in user management (admin can modify any brand's users), performance traps (N+1 queries, no connection pool config, no pagination), and frontend state that can leak between brand switches. This plan fixes them in priority order.
-
----
-
-## Priority 1 — Security (fix before adding more brands)
-
-### Brand isolation in user management (`main.py`)
-
-**Problem:** `PUT /users/{user_id}` and `DELETE /users/{user_id}` query by `user_id` only — no `brand_id` filter. An admin logged into Brand A can modify or delete users belonging to Brand B.
-
-**Fix:** Add `brand_id: int = Depends(get_brand_id)` to both endpoints and add `.filter(models.User.brand_id == brand_id)` to the query.
-
-```python
-# main.py — PUT /users/{user_id}
-user = db.query(models.User).filter(
-    models.User.id == user_id,
-    models.User.brand_id == brand_id,  # ADD THIS
-).first()
-
-# main.py — DELETE /users/{user_id}
-user = db.query(models.User).filter(
-    models.User.id == user_id,
-    models.User.brand_id == brand_id,  # ADD THIS
-).first()
-```
-
-**Files:** `main.py` lines ~877 and ~888
+| Priority | Issue | Status |
+|----------|-------|--------|
+| P1 | User isolation (brand_id filter on user PUT/DELETE) | ✅ Fixed 2026-03-17 |
+| P2 | DB connection pool config (pool_size/max_overflow/recycle) | ✅ Fixed 2026-03-17 |
+| P3 | N+1 in `/admin/overview` (6N queries → 6 queries) | ⏳ Pending |
+| P4 | N+1 in P&L save (100 SKUs = 100 queries) | ⏳ Pending |
+| P5 | Dashboard YTD sum in Python (should be SQL SUM+CASE) | ⏳ Pending |
+| P6 | Frontend state leaks on brand switch | ⏳ Pending |
+| P7 | Race condition in products-sold upsert | ⏳ Pending |
 
 ---
 
-## Priority 2 — DB Connection Pool (`app/db.py`)
+## ✅ P1 — User isolation (`app/routers/auth.py`) — DONE
 
-**Problem:** SQLAlchemy defaults to pool_size=5, max_overflow=10, no pool_recycle. Under concurrent load (multiple brands active simultaneously), connections queue or go stale after Railway's idle timeout (~30 min).
+Added `brand_id = Depends(get_brand_id)` + `.filter(models.User.brand_id == brand_id)` to:
+- `PUT /users/{user_id}`
+- `PUT /users/{user_id}/pages`
+- `PUT /users/{user_id}/readonly`
+- `DELETE /users/{user_id}`
 
-**Fix:**
+Admin on Brand A can no longer modify Brand B users.
+
+---
+
+## ✅ P2 — DB Connection Pool (`app/db.py`) — DONE
 
 ```python
 engine = create_engine(
@@ -44,36 +34,31 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20,
-    pool_recycle=600,   # recycle every 10 min (well under Railway's ~30 min idle timeout)
+    pool_recycle=600,
 )
 ```
 
-**File:** `app/db.py` line ~9
-
 ---
 
-## Priority 3 — Fix N+1 in `/admin/overview` (`main.py`)
+## ⏳ P3 — Fix N+1 in `/admin/overview` (`app/routers/dashboard.py`)
 
-**Problem:** For N brands, the endpoint executes 6N+ DB round-trips (users_count, products_count, cashflow_months_count, cashflow_entries_total, current-month rows loop, bosta_reports_count, last_report). With 10 brands = 60+ queries. Gets worse linearly.
+**Problem:** For N brands → 6N+ DB round-trips.
 
-**Fix:** Replace per-brand scalar queries with bulk GROUP BY aggregations fetched once:
+**Fix:** Replace per-brand scalar queries with bulk GROUP BY aggregations:
 
 ```python
 from sqlalchemy import func
 
-# One query each, grouped by brand_id:
 user_counts    = dict(db.query(models.User.brand_id, func.count()).group_by(models.User.brand_id).all())
 product_counts = dict(db.query(models.Product.brand_id, func.count()).group_by(models.Product.brand_id).all())
 report_counts  = dict(db.query(models.BostaReport.brand_id, func.count()).group_by(models.BostaReport.brand_id).all())
 
-# cashflow entries: join months → entries, group by brand
 entry_counts = dict(
     db.query(models.CashflowMonth.brand_id, func.count(models.CashflowEntry.id))
     .join(models.CashflowEntry, models.CashflowEntry.month_id == models.CashflowMonth.id)
     .group_by(models.CashflowMonth.brand_id).all()
 )
 
-# Current month in/out: SUM grouped by brand_id and type
 cur_month_rows = (
     db.query(
         models.CashflowMonth.brand_id,
@@ -86,26 +71,22 @@ cur_month_rows = (
     .all()
 )
 
-# Last report per brand: subquery with row_number or max(uploaded_at)
 last_reports = dict(
     db.query(models.BostaReport.brand_id, func.max(models.BostaReport.uploaded_at))
     .group_by(models.BostaReport.brand_id).all()
 )
-
 # Then loop brands to assemble response — zero DB queries in the loop
 ```
 
 Total: ~6 queries regardless of brand count (was 6N).
 
-**File:** `main.py` lines ~168–238
-
 ---
 
-## Priority 4 — Fix N+1 in P&L save (`main.py`)
+## ⏳ P4 — Fix N+1 in P&L save (`app/routers/bosta.py`)
 
-**Problem:** `PUT /reports/{report_id}/pl` loops over payload.items and does one SELECT per SKU (100 SKUs = 100 queries).
+**Problem:** `PUT /reports/{report_id}/pl` does one SELECT per SKU.
 
-**Fix:** Fetch all existing rows for the report once, build a dict, upsert from dict:
+**Fix:** Fetch all existing rows once, build dict, upsert:
 
 ```python
 existing = {
@@ -126,15 +107,13 @@ for item in payload.items:
 db.commit()
 ```
 
-**File:** `main.py` lines ~771–787
-
 ---
 
-## Priority 5 — Dashboard summary SQL aggregation (`main.py`)
+## ⏳ P5 — Dashboard summary SQL aggregation (`app/routers/dashboard.py`)
 
-**Problem:** `GET /dashboard/summary` fetches all cashflow entries for all YTD months and sums them in Python. With 12 months × 200 entries = 2400 rows loaded into memory.
+**Problem:** `GET /dashboard/summary` loads all YTD entries into Python memory.
 
-**Fix:** Replace Python loop with SQL SUM + CASE:
+**Fix:**
 
 ```python
 from sqlalchemy import func, case
@@ -147,42 +126,35 @@ total_in_ytd  = totals.total_in  or 0
 total_out_ytd = totals.total_out or 0
 ```
 
-**File:** `main.py` lines ~821–828
-
 ---
 
-## Priority 6 — Frontend: clear page state on brand switch
+## ⏳ P6 — Frontend: clear page state on brand switch
 
-**Problem:** When admin switches brands, page-level state (months, rows, activeMonth) persists from the previous brand for 1 frame before the new brand's useEffect fires. Brand A data is briefly visible under Brand B.
+**Problem:** Stale Brand A data visible for 1 frame after switching to Brand B.
 
-**Fix:** Each data-fetching page reads `brandId` from `useAuth()` and clears its local state in a `useEffect` keyed to `brandId`:
+**Fix:** In each data-fetching page, clear state when `brandId` changes:
 
 ```jsx
-// In Cashflow.jsx, Analytics.jsx, Home.jsx, ProductsSold.jsx, BostaOrders.jsx:
 const { brandId } = useAuth();
-
 useEffect(() => {
   setMonths([]);
-  setRows([]);       // or setSummary(null), setReport(null), etc.
+  setRows([]);  // or setSummary(null), etc.
   setActiveMonth('');
 }, [brandId]);
 ```
 
-Page immediately shows loading state (not stale Brand A data) on brand switch.
-
-**Files:** `frontend/src/pages/Cashflow.jsx`, `Analytics.jsx`, `Home.jsx`, `ProductsSold.jsx`, `BostaOrders.jsx`
+**Files:** `Cashflow.jsx`, `Analytics.jsx`, `Home.jsx`, `ProductsSold.jsx`, `BostaOrders.jsx`
 
 ---
 
-## Priority 7 — Race condition: upsert in products-sold (`main.py`)
+## ⏳ P7 — Race condition: products-sold upsert (`app/routers/products.py`)
 
-**Problem:** `PUT /products-sold/{month}/{sku}` does check-then-create. Two simultaneous requests for the same SKU both see `None`, both INSERT → unique constraint violation → 500.
+**Problem:** `PUT /products-sold/{month}/{sku}` — two simultaneous requests both INSERT → unique constraint violation → 500.
 
-**Fix:** Catch `IntegrityError` and retry fetch:
+**Fix:**
 
 ```python
 from sqlalchemy.exc import IntegrityError
-
 try:
     if not existing_row:
         db.add(new_row)
@@ -191,41 +163,13 @@ except IntegrityError:
     db.rollback()
     with get_db() as db2:
         row = db2.query(models.ProductsSoldManual).filter(...).first()
-        # apply payload fields and commit
+        # apply payload and commit
 ```
-
-**File:** `main.py` lines ~985–997
-
----
-
-## Files to Change
-
-| File | Change |
-|------|--------|
-| `main.py` | P1 user isolation, P3 overview N+1, P4 PL save N+1, P5 dashboard agg, P7 race condition |
-| `app/db.py` | P2 connection pool |
-| `frontend/src/pages/Cashflow.jsx` | P6 brand switch state clear |
-| `frontend/src/pages/Analytics.jsx` | P6 |
-| `frontend/src/pages/Home.jsx` | P6 |
-| `frontend/src/pages/ProductsSold.jsx` | P6 |
-| `frontend/src/pages/BostaOrders.jsx` | P6 |
-
-No migrations needed — all changes are code-only.
-
----
-
-## Verification
-
-1. **Isolation:** Admin on Brand A calls `PUT /users/{id_of_brand_b_user}` → 404 (not found)
-2. **Pool:** 20 concurrent requests → no "QueuePool limit" errors in backend logs
-3. **Overview speed:** `/admin/overview` with 3 brands → ≤6 queries in logs (not 18+)
-4. **PL save:** Save report with 50 SKUs → ≤2 queries in logs (not 50)
-5. **Brand switch:** Switch Zen → Car Play → Cashflow page shows loading spinner immediately (not Zen rows)
 
 ---
 
 ## Deferred (add when needed)
 
-- **Pagination** on `/products`, `/reports`, `/users` — add when any brand hits 500+ items
-- **Table virtualization** (`react-window`) — add when pages routinely exceed 200 rows
-- **Token refresh / auto-logout** — not a scaling blocker today
+- Pagination on `/products`, `/reports`, `/users` — when any brand hits 500+ items
+- Table virtualization (`react-window`) — when pages routinely exceed 200 rows
+- Token refresh / auto-logout

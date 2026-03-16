@@ -293,9 +293,9 @@ def list_users(brand_id: int = Depends(get_brand_id), _admin: models.User = Depe
 
 
 @router.put("/users/{user_id}", tags=["users"])
-def update_user(user_id: int, payload: schemas.UserNameUpdate, _admin: models.User = Depends(require_admin)):
+def update_user(user_id: int, payload: schemas.UserNameUpdate, _admin: models.User = Depends(require_admin), brand_id: int = Depends(get_brand_id)):
     with get_db() as db:
-        user = db.query(models.User).filter(models.User.id == user_id).first()
+        user = db.query(models.User).filter(models.User.id == user_id, models.User.brand_id == brand_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
         user.name = payload.name.strip() or None
@@ -308,9 +308,9 @@ class UserPagesBody(_BaseModel):
 
 
 @router.put("/users/{user_id}/pages", tags=["users"])
-def update_user_pages(user_id: int, body: UserPagesBody, _admin: models.User = Depends(require_admin)):
+def update_user_pages(user_id: int, body: UserPagesBody, _admin: models.User = Depends(require_admin), brand_id: int = Depends(get_brand_id)):
     with get_db() as db:
-        user = db.query(models.User).filter(models.User.id == user_id).first()
+        user = db.query(models.User).filter(models.User.id == user_id, models.User.brand_id == brand_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
         user.allowed_pages = json.dumps(body.allowed_pages) if body.allowed_pages is not None else None
@@ -323,9 +323,9 @@ class UserReadOnlyBody(_BaseModel):
 
 
 @router.put("/users/{user_id}/readonly", tags=["users"])
-def update_user_readonly(user_id: int, body: UserReadOnlyBody, _admin: models.User = Depends(require_admin)):
+def update_user_readonly(user_id: int, body: UserReadOnlyBody, _admin: models.User = Depends(require_admin), brand_id: int = Depends(get_brand_id)):
     with get_db() as db:
-        user = db.query(models.User).filter(models.User.id == user_id).first()
+        user = db.query(models.User).filter(models.User.id == user_id, models.User.brand_id == brand_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
         user.read_only = body.read_only
@@ -334,9 +334,9 @@ def update_user_readonly(user_id: int, body: UserReadOnlyBody, _admin: models.Us
 
 
 @router.delete("/users/{user_id}")
-def delete_user(user_id: int, admin: models.User = Depends(require_admin)):
+def delete_user(user_id: int, admin: models.User = Depends(require_admin), brand_id: int = Depends(get_brand_id)):
     with get_db() as db:
-        user = db.query(models.User).filter(models.User.id == user_id).first()
+        user = db.query(models.User).filter(models.User.id == user_id, models.User.brand_id == brand_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
         if user.id == admin.id:
