@@ -14,6 +14,10 @@ class SettingsUpdate(BaseModel):
     bosta_email:          str | None = None
     bosta_password:       str | None = None
     bosta_email_password: str | None = None
+    alert_enabled:        str | None = None
+    alert_time_1:         str | None = None
+    alert_time_2:         str | None = None
+    alert_low_stock_days: str | None = None
 
 
 @router.get("/settings")
@@ -26,6 +30,10 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         "bosta_email":          data.get("bosta_email", ""),
         "bosta_password":       data.get("bosta_password", ""),
         "bosta_email_password": data.get("bosta_email_password", ""),
+        "alert_enabled":        data.get("alert_enabled", "true"),
+        "alert_time_1":         data.get("alert_time_1", "09:00"),
+        "alert_time_2":         data.get("alert_time_2", "18:00"),
+        "alert_low_stock_days": data.get("alert_low_stock_days", "30"),
     }
 
 
@@ -36,6 +44,10 @@ def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_i
         "bosta_email":          payload.bosta_email           or "",
         "bosta_password":       payload.bosta_password        or "",
         "bosta_email_password": payload.bosta_email_password  or "",
+        "alert_enabled":        payload.alert_enabled        if payload.alert_enabled is not None else "true",
+        "alert_time_1":         payload.alert_time_1         if payload.alert_time_1  is not None else "09:00",
+        "alert_time_2":         payload.alert_time_2         if payload.alert_time_2  is not None else "18:00",
+        "alert_low_stock_days": payload.alert_low_stock_days if payload.alert_low_stock_days is not None else "30",
     }
     with get_db() as db:
         for k, v in updates.items():

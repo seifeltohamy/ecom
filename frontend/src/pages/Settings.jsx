@@ -17,8 +17,39 @@ const labelStyle = {
   fontSize: '.85rem', color: 'var(--muted)', fontWeight: 600,
 };
 
+const HOURS   = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = ['00', '15', '30', '45'];
+
+function TimePicker({ value, onChange, disabled }) {
+  const [h, m] = (value || '09:00').split(':');
+  return (
+    <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+      <select
+        value={h}
+        onChange={e => onChange(`${e.target.value}:${m}`)}
+        disabled={disabled}
+        style={{ ...inputStyle, flex: 'none', width: 70 }}
+      >
+        {HOURS.map(hh => <option key={hh} value={hh}>{hh}</option>)}
+      </select>
+      <span style={{ color: 'var(--muted)' }}>:</span>
+      <select
+        value={m}
+        onChange={e => onChange(`${h}:${e.target.value}`)}
+        disabled={disabled}
+        style={{ ...inputStyle, flex: 'none', width: 70 }}
+      >
+        {MINUTES.map(mm => <option key={mm} value={mm}>{mm}</option>)}
+      </select>
+      <span style={{ fontSize: '.8rem', color: 'var(--muted)' }}>UTC</span>
+    </div>
+  );
+}
+
 export default function Settings() {
   const { brandName } = useAuth();
+
+  // Bosta credentials
   const [apiKey,              setApiKey]              = useState('');
   const [bostaEmail,          setBostaEmail]          = useState('');
   const [bostaPassword,       setBostaPassword]       = useState('');
@@ -26,9 +57,18 @@ export default function Settings() {
   const [showKey,             setShowKey]             = useState(false);
   const [showPass,            setShowPass]            = useState(false);
   const [showEmailPass,       setShowEmailPass]       = useState(false);
-  const [loading,       setLoading]       = useState(true);
-  const [saving,        setSaving]        = useState(false);
-  const [msg,           setMsg]           = useState(null);
+
+  // Stock alert config
+  const [alertEnabled,  setAlertEnabled]  = useState(true);
+  const [alertTime1,    setAlertTime1]    = useState('09:00');
+  const [alertTime2,    setAlertTime2]    = useState('18:00');
+  const [alertTime2On,  setAlertTime2On]  = useState(true);
+  const [alertDays,     setAlertDays]     = useState('30');
+
+  const [loading,      setLoading]      = useState(true);
+  const [saving,       setSaving]       = useState(false);
+  const [savingAlert,  setSavingAlert]  = useState(false);
+  const [msg,          setMsg]          = useState(null);
 
   useEffect(() => {
     authFetch('/settings')
@@ -38,10 +78,23 @@ export default function Settings() {
         setBostaEmail(d.bosta_email || '');
         setBostaPassword(d.bosta_password || '');
         setBostaEmailPassword(d.bosta_email_password || '');
+        setAlertEnabled(d.alert_enabled !== 'false');
+        setAlertTime1(d.alert_time_1 || '09:00');
+        const t2 = d.alert_time_2 || '';
+        setAlertTime2On(!!t2);
+        setAlertTime2(t2 || '18:00');
+        setAlertDays(d.alert_low_stock_days || '30');
       })
       .catch(() => setMsg({ type: 'error', text: 'Failed to load settings.' }))
       .finally(() => setLoading(false));
   }, []);
+
+  const _alertPayload = () => ({
+    alert_enabled:        alertEnabled ? 'true' : 'false',
+    alert_time_1:         alertTime1,
+    alert_time_2:         alertTime2On ? alertTime2 : '',
+    alert_low_stock_days: alertDays,
+  });
 
   async function save() {
     setSaving(true);
@@ -54,12 +107,33 @@ export default function Settings() {
         bosta_email:          bostaEmail.trim(),
         bosta_password:       bostaPassword,
         bosta_email_password: bostaEmailPassword,
+        ..._alertPayload(),
       }),
     });
     setSaving(false);
     setMsg(res.ok
       ? { type: 'success', text: 'Settings saved.' }
       : { type: 'error',   text: 'Failed to save settings.' });
+  }
+
+  async function saveAlert() {
+    setSavingAlert(true);
+    setMsg(null);
+    const res = await authFetch('/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bosta_api_key:        apiKey.trim(),
+        bosta_email:          bostaEmail.trim(),
+        bosta_password:       bostaPassword,
+        bosta_email_password: bostaEmailPassword,
+        ..._alertPayload(),
+      }),
+    });
+    setSavingAlert(false);
+    setMsg(res.ok
+      ? { type: 'success', text: 'Alert settings saved.' }
+      : { type: 'error',   text: 'Failed to save alert settings.' });
   }
 
   const toggleBtn = (show, setShow) => (
@@ -77,9 +151,10 @@ export default function Settings() {
   );
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {msg && <Alert type={msg.type} onClose={() => setMsg(null)}>{msg.text}</Alert>}
 
+      {/* ── Bosta Integration ── */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0' }}>
           <CardTitle>Bosta Integration</CardTitle>
@@ -157,6 +232,71 @@ export default function Settings() {
 
         <Btn onClick={save} disabled={saving || loading}>
           {saving ? 'Saving…' : 'Save Settings'}
+        </Btn>
+      </Card>
+
+      {/* ── Stock Alert Settings ── */}
+      <Card>
+        <CardTitle>Stock Alert Settings</CardTitle>
+        <p style={{ color: 'var(--muted)', fontSize: '.9rem', marginBottom: '1.5rem', marginTop: '.5rem' }}>
+          Receive email alerts when items are out of stock or running low. Emails are sent to your Bosta login email above.
+        </p>
+
+        {/* Enable toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.65rem', marginBottom: '1.5rem' }}>
+          <input
+            id="alert-enabled"
+            type="checkbox"
+            checked={alertEnabled}
+            onChange={e => setAlertEnabled(e.target.checked)}
+            disabled={loading}
+            style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
+          />
+          <label htmlFor="alert-enabled" style={{ fontSize: '.9rem', color: 'var(--text)', cursor: 'pointer' }}>
+            Enable stock alert emails
+          </label>
+        </div>
+
+        {/* Alert Times */}
+        <label style={labelStyle}>Alert Times (UTC)</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <span style={{ fontSize: '.85rem', color: 'var(--muted)', minWidth: 48 }}>Time 1</span>
+            <TimePicker value={alertTime1} onChange={setAlertTime1} disabled={loading || !alertEnabled} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '.85rem', color: 'var(--muted)', minWidth: 48 }}>Time 2</span>
+            <TimePicker value={alertTime2} onChange={setAlertTime2} disabled={loading || !alertEnabled || !alertTime2On} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontSize: '.85rem', color: 'var(--muted)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!alertTime2On}
+                onChange={e => setAlertTime2On(!e.target.checked)}
+                disabled={loading || !alertEnabled}
+                style={{ accentColor: 'var(--accent)' }}
+              />
+              Disable
+            </label>
+          </div>
+        </div>
+
+        {/* Threshold */}
+        <label style={labelStyle}>Low stock threshold</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.65rem', marginBottom: '1.5rem' }}>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={alertDays}
+            onChange={e => setAlertDays(e.target.value)}
+            disabled={loading || !alertEnabled}
+            style={{ ...inputStyle, flex: 'none', width: 80, textAlign: 'center' }}
+          />
+          <span style={{ fontSize: '.9rem', color: 'var(--muted)' }}>days remaining</span>
+        </div>
+
+        <Btn onClick={saveAlert} disabled={savingAlert || loading}>
+          {savingAlert ? 'Saving…' : 'Save Alert Settings'}
         </Btn>
       </Card>
     </div>

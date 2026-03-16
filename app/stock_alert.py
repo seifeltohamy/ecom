@@ -1,12 +1,11 @@
 """
 Stock low-inventory email alert job.
-Runs via APScheduler at 09:00 and 18:00 UTC every day.
-Sends an HTML email to each brand's bosta_email when items are low/out of stock.
+Runs via APScheduler every hour on the hour.
+Each brand configures its own alert times and threshold via Settings.
 """
 
 import json
 import logging
-import os
 import smtplib
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
@@ -19,20 +18,16 @@ from app import models
 
 logger = logging.getLogger("stock_alert")
 
-LOW_STOCK_DAYS = int(os.getenv("LOW_STOCK_DAYS", "30"))
-
 
 # ── Data fetching ──────────────────────────────────────────────────────────────
 
 def _get_all_brands():
-    """Return list of {brand_id, brand_name} for every brand."""
     with get_db() as db:
         brands = db.query(models.Brand).all()
         return [{"brand_id": b.id, "brand_name": b.name} for b in brands]
 
 
 def _get_brand_settings(brand_id: int) -> dict:
-    """Return app_settings dict for a brand."""
     with get_db() as db:
         rows = db.query(models.AppSettings).filter(
             models.AppSettings.brand_id == brand_id
@@ -41,11 +36,6 @@ def _get_brand_settings(brand_id: int) -> dict:
 
 
 def _fetch_stock_rows(brand_id: int, settings: dict) -> list:
-    """
-    Fetch live inventory from Bosta API + purchase prices + report sell data.
-    Returns list of row dicts (same shape as /stock-value endpoint).
-    Returns [] on any error.
-    """
     api_key = settings.get("bosta_api_key", "")
     if not api_key:
         return []
@@ -110,10 +100,10 @@ def _fetch_stock_rows(brand_id: int, settings: dict) -> list:
             avg_daily      = 0.0
 
         rows.append({
-            "sku":           sku,
-            "name":          name,
-            "on_hand":       on_hand,
-            "avg_daily":     avg_daily,
+            "sku":            sku,
+            "name":           name,
+            "on_hand":        on_hand,
+            "avg_daily":      avg_daily,
             "days_remaining": days_remaining,
         })
 
@@ -124,22 +114,21 @@ def _fetch_stock_rows(brand_id: int, settings: dict) -> list:
 
 def _row_color(row: dict) -> str:
     if row["on_hand"] == 0:
-        return "#ffd5d5"   # red — out of stock
+        return "#ffd5d5"
     dr = row["days_remaining"]
     if dr is not None and dr < 7:
-        return "#ffe5c0"   # orange — < 7 days
-    return "#fffbd0"       # yellow — low stock (< threshold)
+        return "#ffe5c0"
+    return "#fffbd0"
 
 
-def _build_html(brand_name: str, rows: list) -> str:
+def _build_html(brand_name: str, rows: list, low_stock_days: int) -> str:
     now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     rows_html = ""
     for r in rows:
         color     = _row_color(r)
-        status    = "Out of stock" if r["on_hand"] == 0 else (
-                    f"{r['days_remaining']} days" if r["days_remaining"] is not None else "No sales data"
-                )
+        status    = ("Out of stock" if r["on_hand"] == 0 else
+                     (f"{r['days_remaining']} days" if r["days_remaining"] is not None else "No sales data"))
         daily_str = f"{r['avg_daily']:.1f} units/day" if r["avg_daily"] > 0 else "—"
         rows_html += f"""
         <tr style="background:{color};">
@@ -176,7 +165,7 @@ def _build_html(brand_name: str, rows: list) -> str:
         <strong>Color legend:</strong>
         <span style="margin-left:8px;">🔴 Out of stock</span>
         <span style="margin-left:12px;">🟠 Less than 7 days</span>
-        <span style="margin-left:12px;">🟡 Less than {LOW_STOCK_DAYS} days</span>
+        <span style="margin-left:12px;">🟡 Less than {low_stock_days} days</span>
       </div>
     </div>
     <div style="padding:12px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:.78rem;color:#9ca3af;">
@@ -206,8 +195,9 @@ def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
 # ── Main job ───────────────────────────────────────────────────────────────────
 
 def run_stock_alert_job():
-    """Called by APScheduler twice a day."""
-    logger.info("Stock alert job started")
+    """Called by APScheduler every hour on the hour. Each brand's configured times gate sending."""
+    now_hm = datetime.now(tz=timezone.utc).strftime("%H:%M")
+    logger.info("Stock alert job running at %s UTC", now_hm)
 
     brands = _get_all_brands()
     for brand in brands:
@@ -215,37 +205,56 @@ def run_stock_alert_job():
         brand_name = brand["brand_name"]
         try:
             settings = _get_brand_settings(brand_id)
+
+            # Master toggle
+            if settings.get("alert_enabled", "true") != "true":
+                logger.info("Brand %s (%s): alerts disabled, skipping", brand_id, brand_name)
+                continue
+
+            # Time gate — only send if current UTC HH:MM matches a configured time
+            time_1 = settings.get("alert_time_1", "09:00")
+            time_2 = settings.get("alert_time_2", "18:00")
+            matched = (time_1 and now_hm == time_1) or (time_2 and now_hm == time_2)
+            if not matched:
+                logger.debug("Brand %s (%s): time %s not in [%s, %s], skipping", brand_id, brand_name, now_hm, time_1, time_2)
+                continue
+
+            # Credentials
             email    = settings.get("bosta_email", "")
             password = settings.get("bosta_email_password", "")
-
             if not email or not password:
                 logger.info("Brand %s (%s): no email/password configured, skipping", brand_id, brand_name)
                 continue
 
-            all_rows  = _fetch_stock_rows(brand_id, settings)
+            # Threshold
+            try:
+                low_stock_days = int(settings.get("alert_low_stock_days", "30"))
+            except (ValueError, TypeError):
+                low_stock_days = 30
+
+            all_rows = _fetch_stock_rows(brand_id, settings)
             if not all_rows:
                 logger.info("Brand %s (%s): no stock data, skipping", brand_id, brand_name)
                 continue
 
-            # Filter: out of stock OR days_remaining below threshold
             low = [
                 r for r in all_rows
                 if r["on_hand"] == 0
-                or (r["days_remaining"] is not None and r["days_remaining"] < LOW_STOCK_DAYS)
+                or (r["days_remaining"] is not None and r["days_remaining"] < low_stock_days)
             ]
 
             if not low:
                 logger.info("Brand %s (%s): all stock healthy, no email sent", brand_id, brand_name)
                 continue
 
-            # Sort: out-of-stock first, then by days_remaining asc (None last)
+            # Sort: out-of-stock first, then by days_remaining asc
             low.sort(key=lambda r: (
                 r["on_hand"] > 0,
                 r["days_remaining"] if r["days_remaining"] is not None else 9999,
             ))
 
             subject = f"⚠️ EcomHQ Low Stock Alert — {brand_name} — {len(low)} item(s) need attention"
-            html    = _build_html(brand_name, low)
+            html    = _build_html(brand_name, low, low_stock_days)
             _send_email(email, password, subject, html)
             logger.info("Brand %s (%s): sent alert for %d items", brand_id, brand_name, len(low))
 

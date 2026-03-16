@@ -14,8 +14,7 @@ app = FastAPI(title="EcomHQ")
 
 # ── Stock alert scheduler (09:00 + 18:00 UTC daily) ───────────────────────────
 _scheduler = BackgroundScheduler(timezone="UTC")
-_scheduler.add_job(run_stock_alert_job, CronTrigger(hour=9,  minute=0))
-_scheduler.add_job(run_stock_alert_job, CronTrigger(hour=18, minute=0))
+_scheduler.add_job(run_stock_alert_job, CronTrigger(minute=0))  # checks every hour; brands filter by configured times
 _scheduler.start()
 
 app.include_router(auth.router)
