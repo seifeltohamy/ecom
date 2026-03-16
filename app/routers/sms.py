@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from app.deps import get_db, get_current_user, get_brand_id, require_writable, require_admin
 from app import models
+from app.bosta_payout import check_bosta_payout_emails
 
 router = APIRouter()
 
@@ -212,6 +213,8 @@ def list_suggestions(
                 "ref_number":  r.ref_number,
                 "tx_date":     r.tx_date.isoformat() if r.tx_date else None,
                 "created_at":  r.created_at.isoformat(),
+                "type":        r.type,
+                "category":    r.category,
             }
             for r in rows
         ]
@@ -250,13 +253,14 @@ def accept_suggestion(
             raise HTTPException(404, "Month not found")
 
         amount = body.amount if body.amount and body.amount > 0 else suggestion.amount
+        category = body.category or suggestion.category or ""
         today  = datetime.utcnow()
         entry  = models.CashflowEntry(
             month_id   = month.id,
             date       = today.strftime("%-d/%-m"),
-            type       = "out",
+            type       = suggestion.type,
             amount     = amount,
-            category   = body.category,
+            category   = category,
             notes      = body.notes or suggestion.description or "",
             created_at = today,
         )
@@ -265,6 +269,17 @@ def accept_suggestion(
         db.commit()
         db.refresh(entry)
         return {"ok": True, "entry_id": entry.id}
+
+
+@router.post("/sms/check-bosta-payouts")
+def check_bosta_payouts(
+    brand_id: int = Depends(get_brand_id),
+    _admin: models.User = Depends(require_admin),
+):
+    """Manually trigger Gmail IMAP check for Bosta cashout emails."""
+    with get_db() as db:
+        new = check_bosta_payout_emails(brand_id, db)
+    return {"ok": True, "new": new}
 
 
 @router.post("/cashflow/sms-suggestions/{suggestion_id}/dismiss")

@@ -9,12 +9,14 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms
 from app.stock_alert import run_stock_alert_job
+from app.bosta_payout import run_bosta_payout_check
 
 app = FastAPI(title="EcomHQ")
 
 # ── Stock alert scheduler (09:00 + 18:00 UTC daily) ───────────────────────────
 _scheduler = BackgroundScheduler(timezone="UTC")
-_scheduler.add_job(run_stock_alert_job, CronTrigger(minute=0))  # checks every hour; brands filter by configured times
+_scheduler.add_job(run_stock_alert_job,     CronTrigger(minute=0))         # hourly; brands filter by configured times
+_scheduler.add_job(run_bosta_payout_check, CronTrigger(hour="*/4", minute=0))  # every 4 hours
 _scheduler.start()
 
 app.include_router(auth.router)

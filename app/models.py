@@ -182,6 +182,8 @@ class SmsSuggestion(Base):
     description = Column(String(256), nullable=True)
     ref_number  = Column(String(64), nullable=True)
     tx_date     = Column(DateTime, nullable=True)
+    type        = Column(String(8),   nullable=False, default="out")   # "in" or "out"
+    category    = Column(String(128), nullable=True)                   # pre-assigned (e.g. "Bosta")
     status      = Column(String(16), nullable=False, default="pending")
     created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
 

@@ -29,10 +29,11 @@ export default function Cashflow() {
   const [allCats,     setAllCats]     = useState([]);
 
   // SMS suggestions
-  const [suggestions,     setSuggestions]     = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [acceptingId,     setAcceptingId]     = useState(null);
-  const [acceptForm,      setAcceptForm]      = useState({ month: '', category: '', notes: '', amount: '' });
+  const [suggestions,      setSuggestions]     = useState([]);
+  const [showSuggestions,  setShowSuggestions] = useState(false);
+  const [acceptingId,      setAcceptingId]     = useState(null);
+  const [acceptForm,       setAcceptForm]      = useState({ month: '', category: '', notes: '', amount: '' });
+  const [checkingPayouts,  setCheckingPayouts] = useState(false);
 
   const loadMonths = useCallback(async () => {
     try {
@@ -78,7 +79,20 @@ export default function Cashflow() {
 
   const openAccept = (s) => {
     setAcceptingId(s.id);
-    setAcceptForm({ month_id: '', category: '', notes: s.description || '', amount: String(s.amount) });
+    setAcceptForm({ month: '', category: s.category || '', notes: s.description || '', amount: String(s.amount) });
+  };
+
+  const checkBostaPayouts = async () => {
+    setCheckingPayouts(true);
+    try {
+      const res  = await authFetch('/sms/check-bosta-payouts', { method: 'POST' });
+      const data = await res.json();
+      if (data.new > 0) {
+        const updated = await authFetch('/cashflow/sms-suggestions').then(r => r.json());
+        if (Array.isArray(updated)) { setSuggestions(updated); setShowSuggestions(true); }
+      }
+    } catch { /* silent */ }
+    finally { setCheckingPayouts(false); }
   };
 
   const submitAccept = async () => {
@@ -201,91 +215,111 @@ export default function Cashflow() {
 
       {loading && <Alert type="loading">Loading cashflow…</Alert>}
 
-      {/* ── SMS Suggestions panel ── */}
-      {suggestions.length > 0 && (
-        <div style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+      {/* ── SMS / Bosta Suggestions panel ── */}
+      <div style={{ marginBottom: '1rem' }}>
+        {/* Check Bosta Payouts button — always visible for admin */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: suggestions.length > 0 ? '.5rem' : 0 }}>
           <button
-            onClick={() => setShowSuggestions(v => !v)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '.65rem 1rem', background: 'var(--surface)', border: 'none', cursor: 'pointer', color: 'var(--text)' }}
+            onClick={checkBostaPayouts}
+            disabled={checkingPayouts}
+            style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--muted)', borderRadius: 'var(--radius-sm)', padding: '.3rem .75rem', cursor: 'pointer', fontSize: '.8rem' }}
           >
-            <span style={{ fontSize: '.88rem', fontWeight: 600 }}>
-              💳 {suggestions.length} bank suggestion{suggestions.length > 1 ? 's' : ''} from CIB
-            </span>
-            <span style={{ fontSize: '.8rem', color: 'var(--muted)' }}>{showSuggestions ? '▲ Hide' : '▼ Show'}</span>
+            {checkingPayouts ? 'Checking…' : '📧 Check Bosta Payouts'}
           </button>
-
-          {showSuggestions && (
-            <div style={{ borderTop: '1px solid var(--border)' }}>
-              {suggestions.map(s => (
-                <div key={s.id} style={{ padding: '.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
-                  {acceptingId === s.id ? (
-                    /* Accept form */
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-                      <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                        <strong style={{ color: 'var(--danger)' }}>EGP {s.amount.toLocaleString()}</strong>
-                        <span style={{ color: 'var(--muted)', fontSize: '.85rem' }}>{s.description}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-                        <select
-                          value={acceptForm.month}
-                          onChange={e => setAcceptForm(f => ({ ...f, month: e.target.value }))}
-                          style={{ padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
-                        >
-                          <option value="">Month…</option>
-                          {months.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                        <select
-                          value={acceptForm.category}
-                          onChange={e => setAcceptForm(f => ({ ...f, category: e.target.value }))}
-                          style={{ padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
-                        >
-                          <option value="">Category…</option>
-                          {allCats.filter(c => c.type === 'out').map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                        </select>
-                        <input
-                          type="number"
-                          value={acceptForm.amount}
-                          onChange={e => setAcceptForm(f => ({ ...f, amount: e.target.value }))}
-                          style={{ width: 90, padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
-                        />
-                        <input
-                          value={acceptForm.notes}
-                          onChange={e => setAcceptForm(f => ({ ...f, notes: e.target.value }))}
-                          placeholder="Notes…"
-                          style={{ flex: 1, minWidth: 100, padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
-                        />
-                      </div>
-                      <div style={{ display: 'flex', gap: '.4rem' }}>
-                        <Btn onClick={submitAccept} disabled={!acceptForm.month || !acceptForm.category}>Confirm</Btn>
-                        <Btn variant="outline" onClick={() => setAcceptingId(null)}>Cancel</Btn>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Summary row */
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.5rem' }}>
-                      <div>
-                        <span style={{ fontWeight: 600, color: 'var(--danger)', marginRight: '.5rem' }}>EGP {s.amount.toLocaleString()}</span>
-                        <span style={{ fontSize: '.88rem', color: 'var(--text)' }}>{s.description}</span>
-                        <span style={{ fontSize: '.78rem', color: 'var(--muted)', marginLeft: '.5rem' }}>
-                          {s.tx_date ? new Date(s.tx_date).toLocaleString('en-EG', { dateStyle: 'medium', timeStyle: 'short' }) : ''}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '.4rem' }}>
-                        <Btn onClick={() => openAccept(s)}>Accept</Btn>
-                        <button
-                          onClick={() => dismissSuggestion(s.id)}
-                          style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--muted)', borderRadius: 'var(--radius-sm)', padding: '.3rem .6rem', cursor: 'pointer', fontSize: '.85rem' }}
-                          title="Dismiss"
-                        >✕</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-      )}
+
+        {suggestions.length > 0 && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+            <button
+              onClick={() => setShowSuggestions(v => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '.65rem 1rem', background: 'var(--surface)', border: 'none', cursor: 'pointer', color: 'var(--text)' }}
+            >
+              <span style={{ fontSize: '.88rem', fontWeight: 600 }}>
+                💳 {suggestions.length} suggestion{suggestions.length > 1 ? 's' : ''}
+              </span>
+              <span style={{ fontSize: '.8rem', color: 'var(--muted)' }}>{showSuggestions ? '▲ Hide' : '▼ Show'}</span>
+            </button>
+
+            {showSuggestions && (
+              <div style={{ borderTop: '1px solid var(--border)' }}>
+                {suggestions.map(s => {
+                  const amountColor = s.type === 'in' ? 'var(--success)' : 'var(--danger)';
+                  return (
+                    <div key={s.id} style={{ padding: '.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
+                      {acceptingId === s.id ? (
+                        /* Accept form */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+                          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <strong style={{ color: amountColor }}>EGP {s.amount.toLocaleString()}</strong>
+                            <span style={{ color: 'var(--muted)', fontSize: '.85rem' }}>{s.description}</span>
+                            {s.category && <span style={{ fontSize: '.78rem', background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 4, padding: '1px 6px', color: 'var(--accent)' }}>{s.category}</span>}
+                          </div>
+                          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                            <select
+                              value={acceptForm.month}
+                              onChange={e => setAcceptForm(f => ({ ...f, month: e.target.value }))}
+                              style={{ padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                            >
+                              <option value="">Month…</option>
+                              {months.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            {/* Only show category dropdown for non-pre-assigned suggestions */}
+                            {!s.category && (
+                              <select
+                                value={acceptForm.category}
+                                onChange={e => setAcceptForm(f => ({ ...f, category: e.target.value }))}
+                                style={{ padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                              >
+                                <option value="">Category…</option>
+                                {allCats.filter(c => c.type === s.type).map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                              </select>
+                            )}
+                            <input
+                              type="number"
+                              value={acceptForm.amount}
+                              onChange={e => setAcceptForm(f => ({ ...f, amount: e.target.value }))}
+                              style={{ width: 90, padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                            />
+                            <input
+                              value={acceptForm.notes}
+                              onChange={e => setAcceptForm(f => ({ ...f, notes: e.target.value }))}
+                              placeholder="Notes…"
+                              style={{ flex: 1, minWidth: 100, padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: '.4rem' }}>
+                            <Btn onClick={submitAccept} disabled={!acceptForm.month || (!s.category && !acceptForm.category)}>Confirm</Btn>
+                            <Btn variant="outline" onClick={() => setAcceptingId(null)}>Cancel</Btn>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Summary row */
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.5rem' }}>
+                          <div>
+                            <span style={{ fontWeight: 600, color: amountColor, marginRight: '.5rem' }}>EGP {s.amount.toLocaleString()}</span>
+                            <span style={{ fontSize: '.88rem', color: 'var(--text)' }}>{s.description}</span>
+                            <span style={{ fontSize: '.78rem', color: 'var(--muted)', marginLeft: '.5rem' }}>
+                              {s.tx_date ? new Date(s.tx_date).toLocaleString('en-EG', { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '.4rem' }}>
+                            <Btn onClick={() => openAccept(s)}>Accept</Btn>
+                            <button
+                              onClick={() => dismissSuggestion(s.id)}
+                              style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--muted)', borderRadius: 'var(--radius-sm)', padding: '.3rem .6rem', cursor: 'pointer', fontSize: '.85rem' }}
+                              title="Dismiss"
+                            >✕</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {!loading && rows.length > 0 && (() => {
         // Compute rows with running balance (chronological), then apply duration filter
