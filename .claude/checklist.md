@@ -46,6 +46,8 @@
 - [x] **Role label "User"** — "Viewer" renamed to "User" in all UI (dropdown + badge); DB enum unchanged
 - [x] **Admin users management in Admin Portal** — `GET /admin/admins`, `PUT /admin/admins/{id}/brands`, `DELETE /admin/admins/{id}`; Admin Users table in AdminPortal with inline brand access editing
 - [x] **Analytics bar chart fixes** — proportional distribution (÷ total), 0.5% min floor; right column 150px + nowrap; Stock Value duplicate title removed
+- [x] **BI Assistant** — Gemini 2.5 Flash chat; bounded data snapshot (cashflow + Bosta report + live stock inventory top 30); `POST /bi/ask` + `GET /bi/history`; migration 0016 `bi_insights` table; chat-style UI with accumulating messages, thinking animation, markdown rendering, EGP currency, New Chat button, mobile responsive; permission-controlled via `PERMISSIONED_PAGES`
+- [x] **Settings brand badge + error fix** — brand name shown in orange pill next to card title; `.catch()` + `.finally()` added to settings fetch to prevent stuck loading state
 
 ## In Progress
 

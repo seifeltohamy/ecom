@@ -342,6 +342,21 @@
 
 ---
 
+## BI Assistant *(brand-scoped)*
+
+### POST /bi/ask
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ question: string }`
+- **Behavior:** Builds bounded data snapshot (cashflow last 6 months, top expense categories, latest Bosta report summary + top SKUs, live stock inventory top 30 via Bosta API), calls Gemini 2.5 Flash, saves Q/A to `bi_insights`, returns answer
+- **Response:** `{ id, answer, created_at }`
+- **Errors:** 400 if `GEMINI_API_KEY` not set; 502 if Gemini API fails
+
+### GET /bi/history
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** `[{ id, question, answer, created_at }]` — latest 50 for current brand, newest first
+
+---
+
 ## Debug
 
 ### POST /debug-upload

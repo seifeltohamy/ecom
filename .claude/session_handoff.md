@@ -4,6 +4,30 @@
 
 ---
 
+## Last Session — 2026-03-16 (BI Assistant overhaul + Settings fix)
+
+### What Was Done
+
+#### BI Assistant — full rebuild
+- **Model**: upgraded `gemini-1.5-flash` → `gemini-2.5-flash` in `app/routers/bi.py`
+- **Markdown rendering**: installed `react-markdown` + `remark-gfm`; replaced `<pre>` tag with `<ReactMarkdown>` + `.bi-answer` CSS class; `@keyframes biDotBounce` added to `index.css`
+- **Chat-style UI**: messages accumulate in a thread (like Claude) instead of replacing each other; user messages = right-aligned orange bubble; AI messages = left-aligned with "AI" avatar; thinking animation (bouncing dots) appears as an AI bubble while waiting; auto-scrolls to bottom
+- **Optimistic UI**: user message appears immediately on submit before response
+- **New Chat button**: top-right, resets messages + focuses textarea
+- **Full-height layout**: page fills `calc(100dvh - 150px)` with flex column; sidebar scrolls independently; composer pinned at bottom; Q/A area scrollable
+- **Empty state**: placeholder shown when no conversation active
+- **EGP currency**: system prompt instructs Gemini to always use EGP suffix on amounts
+- **Stock inventory in snapshot**: `_build_snapshot` now calls Bosta fulfillment API to get live `on_hand`, `consumer_price`, `days_remaining`, `sell_through` per SKU (top 30 by consumer_value); falls back gracefully if API unavailable; uses same logic as Stock Value page
+- **Permissions**: `/bi` added to `PERMISSIONED_PAGES`; nav link now uses `canSee('/bi')` guard; `ProtectedRoute` blocks direct URL access for viewers without permission
+- **Mobile responsive**: history sidebar hidden by default on ≤700px; "☰ History" toggle button shown; clicking a history item closes drawer; `.bi-page`, `.bi-layout`, `.bi-sidebar`, `.bi-history-toggle`, `.bi-user-bubble` CSS classes added to `index.css`
+- **Enter key**: any Enter press submits (removed Shift+Enter requirement)
+
+#### Settings page — two fixes
+- **Brand badge**: shows current brand name in orange pill next to "Bosta Integration" card title — makes it obvious whose settings are being edited when switching brands
+- **Error handling**: added `.catch()` + `.finally()` to the `useEffect` fetch so page doesn't get stuck on loading if the request fails; removed unused `S` import
+
+---
+
 ## Last Session — 2026-03-12 (documentation sync)
 
 ### What Was Done

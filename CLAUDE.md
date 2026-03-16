@@ -115,6 +115,6 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-12): Analytics enhancements (trend table, Bosta P&L card, Potential Revenue card, Money In chart, Net card). Stock Value gains Sold/Sell-Through/Days Left columns + GMROI + Slow Mover Capital cards. New `require_writable` dep enforces read-only user flag (migration 0015) on all write endpoints. Settings added to PERMISSIONED_PAGES. Home.jsx reverted to original.
-All migrations through 0015 applied locally; not yet deployed to Railway.
+Last session (2026-03-16): BI Assistant fully rebuilt — Gemini 2.5 Flash, chat-style accumulating messages, markdown rendering, thinking animation, live stock inventory in snapshot, EGP currency, mobile responsive, permission-controlled. Settings page shows brand badge + error handling fix. All migrations through 0016 applied and deployed.
+Env var `GEMINI_API_KEY` must be set in Railway dashboard for BI to work.
 Pending: frontend read-only UI enforcement (disable write buttons when isReadOnly), password change, cashflow CSV export.
