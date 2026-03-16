@@ -77,11 +77,13 @@ def _parse_tx_date(text: str) -> datetime:
     return datetime.utcnow()
 
 
-def check_bosta_payout_emails(brand_id: int, db) -> int:
+def check_bosta_payout_emails(brand_id: int, db) -> dict:
     """Check Gmail for Bosta cashout emails and create suggestions.
 
-    Returns the number of new suggestions created.
+    Returns {"emails_found": int, "new": int, "error": str|None}
     """
+    result = {"emails_found": 0, "new": 0, "error": None}
+
     # Get credentials
     settings = {
         r.key: r.value
@@ -92,20 +94,19 @@ def check_bosta_payout_emails(brand_id: int, db) -> int:
     gmail_user = settings.get("bosta_email", "")
     gmail_pass = settings.get("bosta_email_password", "")
     if not gmail_user or not gmail_pass:
-        logger.info("Brand %s: no Gmail credentials configured, skipping", brand_id)
-        return 0
+        result["error"] = "No Gmail credentials configured in Settings"
+        return result
 
-    new_count = 0
     try:
         mail = imaplib.IMAP4_SSL("imap.gmail.com")
         mail.login(gmail_user, gmail_pass)
         mail.select("inbox")
 
-        # Search last 30 days from no-reply@bosta.co
         since = (datetime.utcnow() - timedelta(days=2)).strftime("%d-%b-%Y")
         _, msgs = mail.search(None, f'FROM "no-reply@bosta.co" SINCE {since}')
         ids = msgs[0].split()
-        logger.info("Brand %s: %d email(s) from no-reply@bosta.co in last 30 days", brand_id, len(ids))
+        result["emails_found"] = len(ids)
+        logger.info("Brand %s: %d email(s) from no-reply@bosta.co in last 2 days", brand_id, len(ids))
 
         for msg_id in ids:
             _, data = mail.fetch(msg_id, "(RFC822)")
@@ -140,6 +141,7 @@ def check_bosta_payout_emails(brand_id: int, db) -> int:
             amount = _parse_arabic_amount(body_text)
             if not amount:
                 logger.warning("Brand %s: could not parse amount from Cashout email (subject: %s)", brand_id, subject)
+                result["error"] = f"Found email but could not parse amount (subject: {subject})"
                 continue
 
             invoice = _parse_invoice(body_text)
@@ -175,15 +177,16 @@ def check_bosta_payout_emails(brand_id: int, db) -> int:
             )
             db.add(suggestion)
             db.commit()
-            new_count += 1
+            result["new"] += 1
             logger.info("Brand %s: created Bosta payout suggestion — %s EGP (invoice %s)", brand_id, amount, invoice)
 
         mail.logout()
 
     except Exception as exc:
         logger.error("Brand %s: bosta payout check failed — %s", brand_id, exc, exc_info=True)
+        result["error"] = str(exc)
 
-    return new_count
+    return result
 
 
 def run_bosta_payout_check():
@@ -196,9 +199,8 @@ def run_bosta_payout_check():
     for brand_id in brand_ids:
         with get_db() as db:
             try:
-                n = check_bosta_payout_emails(brand_id, db)
-                if n:
-                    logger.info("Brand %s: %d new payout suggestion(s)", brand_id, n)
+                r = check_bosta_payout_emails(brand_id, db)
+                logger.info("Brand %s: found=%d new=%d error=%s", brand_id, r["emails_found"], r["new"], r["error"])
             except Exception as exc:
                 logger.error("Brand %s: error — %s", brand_id, exc, exc_info=True)
 

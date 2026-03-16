@@ -278,8 +278,8 @@ def check_bosta_payouts(
 ):
     """Manually trigger Gmail IMAP check for Bosta cashout emails."""
     with get_db() as db:
-        new = check_bosta_payout_emails(brand_id, db)
-    return {"ok": True, "new": new}
+        result = check_bosta_payout_emails(brand_id, db)
+    return {"ok": True, **result}
 
 
 @router.post("/cashflow/sms-suggestions/{suggestion_id}/dismiss")

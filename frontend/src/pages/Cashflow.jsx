@@ -87,12 +87,19 @@ export default function Cashflow() {
     try {
       const res  = await authFetch('/sms/check-bosta-payouts', { method: 'POST' });
       const data = await res.json();
-      if (data.new > 0) {
+      if (data.error) {
+        alert(`Check failed: ${data.error}`);
+      } else if (data.new > 0) {
         const updated = await authFetch('/cashflow/sms-suggestions').then(r => r.json());
         if (Array.isArray(updated)) { setSuggestions(updated); setShowSuggestions(true); }
+      } else {
+        alert(`No new payouts found (${data.emails_found} email${data.emails_found !== 1 ? 's' : ''} checked).`);
       }
-    } catch { /* silent */ }
-    finally { setCheckingPayouts(false); }
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    } finally {
+      setCheckingPayouts(false);
+    }
   };
 
   const submitAccept = async () => {
