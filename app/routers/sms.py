@@ -106,7 +106,7 @@ def sms_intake(payload: SmsIntakeBody, token: str = Query(...)):
         # Parse
         parsed = parse_cib_sms(payload.body)
         if not parsed:
-            return {"ok": False, "reason": "unrecognised"}
+            return {"ok": False, "reason": "unrecognised", "received": repr(payload.body[:200])}
 
         # Dedup by ref_number
         if parsed["ref_number"]:
