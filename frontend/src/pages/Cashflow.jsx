@@ -71,6 +71,7 @@ export default function Cashflow() {
   }, []);
 
   const dismissSuggestion = async (id) => {
+    if (!window.confirm('Dismiss this suggestion? It will be hidden but kept in records.')) return;
     setSuggestions(s => s.filter(x => x.id !== id));
     await authFetch(`/cashflow/sms-suggestions/${id}/dismiss`, { method: 'POST' });
   };
