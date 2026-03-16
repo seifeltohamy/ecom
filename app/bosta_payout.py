@@ -101,7 +101,7 @@ def check_bosta_payout_emails(brand_id: int, db) -> int:
         mail.select("inbox")
 
         # Search last 30 days from no-reply@bosta.co
-        since = (datetime.utcnow() - timedelta(days=30)).strftime("%d-%b-%Y")
+        since = (datetime.utcnow() - timedelta(days=2)).strftime("%d-%b-%Y")
         _, msgs = mail.search(None, f'FROM "no-reply@bosta.co" SINCE {since}')
         ids = msgs[0].split()
         logger.info("Brand %s: %d email(s) from no-reply@bosta.co in last 30 days", brand_id, len(ids))
