@@ -28,6 +28,12 @@ export default function Cashflow() {
   const [loading,     setLoading]     = useState(true);
   const [allCats,     setAllCats]     = useState([]);
 
+  // SMS suggestions
+  const [suggestions,     setSuggestions]     = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [acceptingId,     setAcceptingId]     = useState(null);
+  const [acceptForm,      setAcceptForm]      = useState({ month: '', category: '', notes: '', amount: '' });
+
   const loadMonths = useCallback(async () => {
     try {
       const res  = await authFetch('/cashflow/months');
@@ -61,7 +67,37 @@ export default function Cashflow() {
   useEffect(() => { loadRows(activeMonth); }, [activeMonth, loadRows]);
   useEffect(() => {
     authFetch('/categories').then(r => r.json()).then(data => { if (Array.isArray(data)) setAllCats(data); });
+    authFetch('/cashflow/sms-suggestions').then(r => r.json()).then(data => { if (Array.isArray(data)) setSuggestions(data); }).catch(() => {});
   }, []);
+
+  const dismissSuggestion = async (id) => {
+    setSuggestions(s => s.filter(x => x.id !== id));
+    await authFetch(`/cashflow/sms-suggestions/${id}/dismiss`, { method: 'POST' });
+  };
+
+  const openAccept = (s) => {
+    setAcceptingId(s.id);
+    setAcceptForm({ month_id: '', category: '', notes: s.description || '', amount: String(s.amount) });
+  };
+
+  const submitAccept = async () => {
+    if (!acceptForm.month || !acceptForm.category) return;
+    const res = await authFetch(`/cashflow/sms-suggestions/${acceptingId}/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        month:    acceptForm.month,
+        category: acceptForm.category,
+        notes:    acceptForm.notes,
+        amount:   Number(acceptForm.amount),
+      }),
+    });
+    if (res.ok) {
+      setSuggestions(s => s.filter(x => x.id !== acceptingId));
+      setAcceptingId(null);
+      loadRows(activeMonth);
+    }
+  };
 
   const reset = () => {
     setDate(''); setType('in'); setAmount(''); setCategory(''); setNotes(''); setError('');
@@ -163,6 +199,92 @@ export default function Cashflow() {
       </div>
 
       {loading && <Alert type="loading">Loading cashflow…</Alert>}
+
+      {/* ── SMS Suggestions panel ── */}
+      {suggestions.length > 0 && (
+        <div style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
+          <button
+            onClick={() => setShowSuggestions(v => !v)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '.65rem 1rem', background: 'var(--surface)', border: 'none', cursor: 'pointer', color: 'var(--text)' }}
+          >
+            <span style={{ fontSize: '.88rem', fontWeight: 600 }}>
+              💳 {suggestions.length} bank suggestion{suggestions.length > 1 ? 's' : ''} from CIB
+            </span>
+            <span style={{ fontSize: '.8rem', color: 'var(--muted)' }}>{showSuggestions ? '▲ Hide' : '▼ Show'}</span>
+          </button>
+
+          {showSuggestions && (
+            <div style={{ borderTop: '1px solid var(--border)' }}>
+              {suggestions.map(s => (
+                <div key={s.id} style={{ padding: '.75rem 1rem', borderBottom: '1px solid var(--border)', background: 'var(--surface2)' }}>
+                  {acceptingId === s.id ? (
+                    /* Accept form */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+                      <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <strong style={{ color: 'var(--danger)' }}>EGP {s.amount.toLocaleString()}</strong>
+                        <span style={{ color: 'var(--muted)', fontSize: '.85rem' }}>{s.description}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                        <select
+                          value={acceptForm.month}
+                          onChange={e => setAcceptForm(f => ({ ...f, month: e.target.value }))}
+                          style={{ padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                        >
+                          <option value="">Month…</option>
+                          {months.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <select
+                          value={acceptForm.category}
+                          onChange={e => setAcceptForm(f => ({ ...f, category: e.target.value }))}
+                          style={{ padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                        >
+                          <option value="">Category…</option>
+                          {allCats.filter(c => c.type === 'out').map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                        </select>
+                        <input
+                          type="number"
+                          value={acceptForm.amount}
+                          onChange={e => setAcceptForm(f => ({ ...f, amount: e.target.value }))}
+                          style={{ width: 90, padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                        />
+                        <input
+                          value={acceptForm.notes}
+                          onChange={e => setAcceptForm(f => ({ ...f, notes: e.target.value }))}
+                          placeholder="Notes…"
+                          style={{ flex: 1, minWidth: 100, padding: '.4rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: '.4rem' }}>
+                        <Btn onClick={submitAccept} disabled={!acceptForm.month || !acceptForm.category}>Confirm</Btn>
+                        <Btn variant="outline" onClick={() => setAcceptingId(null)}>Cancel</Btn>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Summary row */
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.5rem' }}>
+                      <div>
+                        <span style={{ fontWeight: 600, color: 'var(--danger)', marginRight: '.5rem' }}>EGP {s.amount.toLocaleString()}</span>
+                        <span style={{ fontSize: '.88rem', color: 'var(--text)' }}>{s.description}</span>
+                        <span style={{ fontSize: '.78rem', color: 'var(--muted)', marginLeft: '.5rem' }}>
+                          {s.tx_date ? new Date(s.tx_date).toLocaleString('en-EG', { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '.4rem' }}>
+                        <Btn onClick={() => openAccept(s)}>Accept</Btn>
+                        <button
+                          onClick={() => dismissSuggestion(s.id)}
+                          style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--muted)', borderRadius: 'var(--radius-sm)', padding: '.3rem .6rem', cursor: 'pointer', fontSize: '.85rem' }}
+                          title="Dismiss"
+                        >✕</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {!loading && rows.length > 0 && (() => {
         // Compute rows with running balance (chronological), then apply duration filter

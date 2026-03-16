@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi
+from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms
 from app.stock_alert import run_stock_alert_job
 
 app = FastAPI(title="EcomHQ")
@@ -24,6 +24,7 @@ app.include_router(products.router)
 app.include_router(settings.router)
 app.include_router(bosta.router)
 app.include_router(bi.router)
+app.include_router(sms.router)
 
 
 # ── SPA / static file serving ─────────────────────────────────────────────────

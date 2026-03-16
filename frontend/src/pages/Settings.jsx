@@ -70,6 +70,37 @@ export default function Settings() {
   const [savingAlert,  setSavingAlert]  = useState(false);
   const [msg,          setMsg]          = useState(null);
 
+  // SMS integration
+  const [smsToken,       setSmsToken]       = useState('');
+  const [smsIntakeUrl,   setSmsIntakeUrl]   = useState('');
+  const [loadingSms,     setLoadingSms]     = useState(true);
+  const [regenerating,   setRegenerating]   = useState(false);
+  const [copied,         setCopied]         = useState(false);
+
+  useEffect(() => {
+    authFetch('/sms/token')
+      .then(r => r.json())
+      .then(d => { setSmsToken(d.token || ''); setSmsIntakeUrl(d.intake_url || ''); })
+      .catch(() => {})
+      .finally(() => setLoadingSms(false));
+  }, []);
+
+  async function regenerateToken() {
+    setRegenerating(true);
+    const res = await authFetch('/sms/token/regenerate', { method: 'POST' });
+    const d   = await res.json();
+    setSmsToken(d.token || '');
+    setSmsIntakeUrl(d.intake_url || '');
+    setRegenerating(false);
+  }
+
+  function copyUrl() {
+    navigator.clipboard.writeText(smsIntakeUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   useEffect(() => {
     authFetch('/settings')
       .then(r => r.json())
@@ -298,6 +329,58 @@ export default function Settings() {
         <Btn onClick={saveAlert} disabled={savingAlert || loading}>
           {savingAlert ? 'Saving…' : 'Save Alert Settings'}
         </Btn>
+      </Card>
+
+      {/* ── Bank SMS Integration ── */}
+      <Card>
+        <CardTitle>Bank SMS Integration</CardTitle>
+        <p style={{ color: 'var(--muted)', fontSize: '.9rem', marginBottom: '1.5rem', marginTop: '.5rem' }}>
+          Automatically capture CIB deduction messages as cashflow suggestions. Set up an iOS Shortcut that posts each bank SMS to this webhook.
+        </p>
+
+        <label style={labelStyle}>Webhook URL (paste into iOS Shortcut)</label>
+        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem' }}>
+          <input
+            readOnly
+            value={loadingSms ? 'Loading…' : smsIntakeUrl}
+            style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '.78rem', color: 'var(--muted)' }}
+            onFocus={e => e.target.select()}
+          />
+          <button
+            onClick={copyUrl}
+            disabled={loadingSms || !smsIntakeUrl}
+            style={{
+              background: 'transparent', border: '1px solid var(--border)',
+              color: copied ? 'var(--success)' : 'var(--muted)', borderRadius: 'var(--radius-sm)',
+              padding: '.5rem .75rem', cursor: 'pointer', fontSize: '.85rem', whiteSpace: 'nowrap',
+            }}
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+
+        <Btn variant="outline" onClick={regenerateToken} disabled={regenerating || loadingSms} style={{ marginBottom: '1.5rem' }}>
+          {regenerating ? 'Regenerating…' : 'Regenerate Token'}
+        </Btn>
+
+        <details style={{ marginTop: '.25rem' }}>
+          <summary style={{ fontSize: '.85rem', color: 'var(--muted)', cursor: 'pointer', fontWeight: 600, marginBottom: '.75rem' }}>
+            iOS Shortcut setup instructions
+          </summary>
+          <ol style={{ fontSize: '.85rem', color: 'var(--muted)', lineHeight: 1.8, paddingLeft: '1.2rem', marginTop: '.5rem' }}>
+            <li>Open the <strong>Shortcuts</strong> app → <strong>Automation</strong> tab → <strong>New Automation</strong></li>
+            <li>Trigger: <strong>Message</strong> → filter <em>Message Contains</em> → type <code>19666</code></li>
+            <li>Add action: <strong>Get Contents of URL</strong>
+              <ul style={{ marginTop: '.25rem', listStyle: 'disc', paddingLeft: '1rem' }}>
+                <li>URL: paste the webhook URL above</li>
+                <li>Method: <strong>POST</strong></li>
+                <li>Request Body: <strong>JSON</strong></li>
+                <li>Add field <code>body</code> → value: tap <em>Shortcut Input</em></li>
+              </ul>
+            </li>
+            <li>Turn off <strong>"Ask Before Running"</strong> so it fires silently</li>
+          </ol>
+        </details>
       </Card>
     </div>
   );

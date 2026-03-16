@@ -171,3 +171,18 @@ class BiInsight(Base):
     prompt_tokens   = Column(Integer, nullable=True)
     response_tokens = Column(Integer, nullable=True)
     created_at      = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class SmsSuggestion(Base):
+    __tablename__ = "sms_suggestions"
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id    = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    raw_text    = Column(Text, nullable=True)
+    amount      = Column(Float, nullable=False)
+    description = Column(String(256), nullable=True)
+    ref_number  = Column(String(64), nullable=True)
+    tx_date     = Column(DateTime, nullable=True)
+    status      = Column(String(16), nullable=False, default="pending")
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("brand_id", "ref_number", name="uq_sms_brand_ref"),)
