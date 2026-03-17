@@ -82,7 +82,7 @@ export default function Settings() {
   const [metaMsg,           setMetaMsg]            = useState(null);
   const [fbReady,           setFbReady]            = useState(false);
   const [manualToken,       setManualToken]        = useState('');
-  const [showManualInput,   setShowManualInput]    = useState(false);
+  const [showManualInput,   setShowManualInput]    = useState(true);
 
   // SMS integration
   const [smsToken,       setSmsToken]       = useState('');
