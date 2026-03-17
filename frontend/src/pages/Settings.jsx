@@ -81,8 +81,6 @@ export default function Settings() {
   const [disconnectingMeta, setDisconnectingMeta]  = useState(false);
   const [metaMsg,           setMetaMsg]            = useState(null);
   const [fbReady,           setFbReady]            = useState(false);
-  const [manualToken,       setManualToken]        = useState('');
-  const [showManualInput,   setShowManualInput]    = useState(true);
 
   // SMS integration
   const [smsToken,       setSmsToken]       = useState('');
@@ -91,27 +89,29 @@ export default function Settings() {
   const [regenerating,   setRegenerating]   = useState(false);
   const [copied,         setCopied]         = useState(false);
 
-  // Load FB JS SDK + init with Meta App ID
+  // Load FB JS SDK — set fbAsyncInit BEFORE injecting the script so it's
+  // guaranteed to be called when the SDK finishes loading.
   useEffect(() => {
-    authFetch('/meta/config')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d?.app_id) return;
-        window.fbAsyncInit = () => {
-          window.FB.init({ appId: d.app_id, cookie: true, version: 'v21.0' });
-          setFbReady(true);
-        };
-        if (!document.getElementById('fb-sdk')) {
-          const s = document.createElement('script');
-          s.id  = 'fb-sdk';
-          s.src = 'https://connect.facebook.net/en_US/sdk.js';
-          s.async = true;
-          document.body.appendChild(s);
-        } else {
-          setFbReady(true); // already loaded
-        }
-      })
-      .catch(() => {});
+    const appId = import.meta.env.VITE_META_APP_ID;
+    if (!appId) return;
+
+    window.fbAsyncInit = () => {
+      window.FB.init({ appId, cookie: true, xfbml: false, version: 'v21.0' });
+      setFbReady(true);
+    };
+
+    if (document.getElementById('fb-sdk')) {
+      // Script already in DOM (e.g. hot-reload) — re-init if FB object exists
+      if (window.FB) { window.FB.init({ appId, cookie: true, xfbml: false, version: 'v21.0' }); setFbReady(true); }
+      return;
+    }
+
+    const s = document.createElement('script');
+    s.id    = 'fb-sdk';
+    s.src   = 'https://connect.facebook.net/en_US/sdk.js';
+    s.async = true;
+    s.defer = true;
+    document.body.appendChild(s);
   }, []);
 
   // Populate meta status from /settings load (runs after the Bosta settings useEffect)
@@ -169,30 +169,6 @@ export default function Settings() {
       setMetaMsg({ type: 'success', text: 'Ad account saved.' });
     } else {
       setMetaMsg({ type: 'error', text: 'Failed to save ad account.' });
-    }
-  }
-
-  async function connectManual() {
-    if (!manualToken.trim()) return;
-    setConnectingMeta(true);
-    setMetaMsg(null);
-    try {
-      const res  = await authFetch('/meta/auth/manual', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: manualToken.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setMetaMsg({ type: 'error', text: data.detail || 'Connection failed.' }); return; }
-      setMetaConnected(true);
-      setMetaConnectedName(data.connected_name || '');
-      setAdAccounts(data.ad_accounts || []);
-      if (data.ad_accounts?.length === 1) setSelectedAccount(data.ad_accounts[0].id);
-      setManualToken('');
-      setShowManualInput(false);
-    } catch (e) {
-      setMetaMsg({ type: 'error', text: `Error: ${e.message}` });
-    } finally {
-      setConnectingMeta(false);
     }
   }
 
@@ -476,39 +452,18 @@ export default function Settings() {
         {metaMsg && <Alert type={metaMsg.type} onClose={() => setMetaMsg(null)} style={{ marginBottom: '1rem' }}>{metaMsg.text}</Alert>}
 
         {!metaConnected ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <Btn onClick={connectFacebook} disabled={connectingMeta || !fbReady}>
-                {connectingMeta ? 'Connecting…' : '🔗 Connect Facebook'}
-              </Btn>
-              <button
-                onClick={() => setShowManualInput(v => !v)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.82rem', textDecoration: 'underline' }}
-              >
-                {showManualInput ? 'Cancel' : 'Paste token manually'}
-              </button>
-            </div>
-            {showManualInput && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-                <label style={{ fontSize: '.8rem', color: 'var(--muted)' }}>
-                  Paste your long-lived Meta User Access Token
-                  <span style={{ display: 'block', fontSize: '.75rem', marginTop: '.2rem' }}>
-                    Get it from: Meta for Developers → Tools → Graph API Explorer → Generate Token
-                  </span>
-                </label>
-                <div style={{ display: 'flex', gap: '.5rem' }}>
-                  <input
-                    type="password"
-                    value={manualToken}
-                    onChange={e => setManualToken(e.target.value)}
-                    placeholder="EAAxxxxx…"
-                    style={{ ...inputStyle, flex: 1, fontFamily: 'monospace', fontSize: '.8rem' }}
-                  />
-                  <Btn onClick={connectManual} disabled={connectingMeta || !manualToken.trim()}>
-                    {connectingMeta ? 'Connecting…' : 'Connect'}
-                  </Btn>
-                </div>
-              </div>
+          <div>
+            <Btn
+              onClick={connectFacebook}
+              disabled={connectingMeta || !fbReady}
+              style={{ background: '#1877f2', color: '#fff', border: 'none' }}
+            >
+              {connectingMeta ? 'Connecting…' : !fbReady ? 'Loading…' : '🔵 Continue with Facebook'}
+            </Btn>
+            {!fbReady && (
+              <p style={{ fontSize: '.8rem', color: 'var(--muted)', marginTop: '.5rem' }}>
+                Loading Facebook SDK…
+              </p>
             )}
           </div>
         ) : (

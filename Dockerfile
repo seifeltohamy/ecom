@@ -1,5 +1,7 @@
 # Stage 1 — Build React frontend
 FROM node:20-alpine AS frontend-builder
+ARG VITE_META_APP_ID
+ENV VITE_META_APP_ID=$VITE_META_APP_ID
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install
