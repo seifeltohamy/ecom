@@ -116,6 +116,25 @@ def meta_auth(
     return {"ok": True, "connected_name": name, "ad_accounts": accounts}
 
 
+@router.post("/meta/auth/manual")
+def meta_auth_manual(
+    body:     MetaAuthBody,
+    brand_id: int = Depends(get_brand_id),
+    _admin:   models.User = Depends(require_admin),
+):
+    """Save a pre-existing long-lived token directly (skips OAuth exchange)."""
+    try:
+        name     = meta_client.get_user_name(body.access_token)
+        accounts = meta_client.get_ad_accounts(body.access_token)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
+
+    _upsert_setting(brand_id, "meta_access_token",   body.access_token)
+    _upsert_setting(brand_id, "meta_connected_name", name)
+
+    return {"ok": True, "connected_name": name, "ad_accounts": accounts}
+
+
 @router.post("/meta/select-account")
 def meta_select_account(
     body:     SelectAccountBody,
