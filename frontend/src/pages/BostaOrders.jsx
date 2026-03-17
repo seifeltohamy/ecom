@@ -144,7 +144,15 @@ export default function BostaOrders() {
     authFetch(`/reports/${id}/pl`).then(async res => {
       if (!res.ok) return;
       const data = await res.json();
-      if (data.ads_spent != null) setAdsSpent(String(data.ads_spent));
+      if (data.ads_spent != null) {
+        setAdsSpent(String(data.ads_spent));
+      } else if (report.date_from && report.date_to) {
+        // Auto-fill from Meta if no ads_spent saved yet
+        authFetch(`/meta/summary?date_from=${report.date_from}&date_to=${report.date_to}`)
+          .then(r => r.json())
+          .then(m => { if (m?.connected && m.spend > 0) setAdsSpent(String(m.spend)); })
+          .catch(() => {});
+      }
       if (data.items?.length) {
         setPl(prev => {
           const next = { ...prev };
@@ -403,7 +411,7 @@ export default function BostaOrders() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
                   <label style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', whiteSpace: 'nowrap' }}>Ads Spent (EGP)</label>
                   <input
-                    type="number" step="0.01" placeholder="0" value={adsSpent}
+                    type="text" placeholder="0" value={adsSpent}
                     onChange={e => setAdsSpent(e.target.value)}
                     style={{ width: 110, background: 'var(--surface2, #1c1917)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '.35rem .6rem', fontSize: '.9rem', fontFamily: 'inherit', outline: 'none' }}
                   />

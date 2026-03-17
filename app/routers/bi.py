@@ -96,11 +96,12 @@ def _build_snapshot(brand_id: int) -> dict:
                 report_days = max(1, (d1 - d0).days + 1)
 
         # ── Bosta API — live inventory ────────────────────────────────────────
-        api_key_row = db.query(models.AppSettings).filter(
-            models.AppSettings.key == "bosta_api_key",
+        settings_rows = db.query(models.AppSettings).filter(
             models.AppSettings.brand_id == brand_id,
-        ).first()
-        bosta_api_key = api_key_row.value if api_key_row else ""
+            models.AppSettings.key.in_(["bosta_api_key", "meta_access_token", "meta_ad_account_id"]),
+        ).all()
+        settings_map  = {r.key: r.value for r in settings_rows}
+        bosta_api_key = settings_map.get("bosta_api_key", "")
 
     stock_inventory = []
     if bosta_api_key:
@@ -157,6 +158,28 @@ def _build_snapshot(brand_id: int) -> dict:
         "inventory_note": "Full per-SKU inventory included below" if stock_inventory else "Bosta API unavailable — only totals shown",
     }
 
+    # ── Meta Ads — last 30 days ───────────────────────────────────────────────
+    meta_ads = None
+    meta_token      = settings_map.get("meta_access_token", "")
+    meta_account_id = settings_map.get("meta_ad_account_id", "")
+    if meta_token and meta_account_id:
+        try:
+            from datetime import timedelta, timezone
+            from app import meta_client
+            _now      = _dt.now(tz=timezone.utc)
+            date_from = (_now - timedelta(days=30)).strftime("%Y-%m-%d")
+            date_to   = _now.strftime("%Y-%m-%d")
+            summary   = meta_client.get_spend_summary(meta_token, meta_account_id, date_from, date_to)
+            campaigns = meta_client.get_campaigns(meta_token, meta_account_id, date_from, date_to)
+            meta_ads  = {
+                "period":       f"{date_from} to {date_to}",
+                "total_spend":  summary["spend"],
+                "currency":     summary.get("currency", "EGP"),
+                "campaigns":    campaigns[:10],
+            }
+        except Exception:
+            meta_ads = None
+
     return {
         "cashflow_last_6_months": cashflow_months,
         "current_month_top_expense_categories": current_month_cats,
@@ -164,6 +187,7 @@ def _build_snapshot(brand_id: int) -> dict:
         "top_skus_by_revenue": top_skus,
         "stock_summary": stock_summary,
         "stock_inventory_top30": stock_inventory,
+        "meta_ads_last_30_days": meta_ads,
     }
 
 

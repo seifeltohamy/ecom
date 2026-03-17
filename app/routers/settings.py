@@ -34,6 +34,10 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         "alert_time_1":         data.get("alert_time_1", "09:00"),
         "alert_time_2":         data.get("alert_time_2", "18:00"),
         "alert_low_stock_days": data.get("alert_low_stock_days", "30"),
+        # Meta Ads — token never exposed; only derived status
+        "meta_connected":       bool(data.get("meta_access_token")),
+        "meta_connected_name":  data.get("meta_connected_name", ""),
+        "meta_ad_account_id":   data.get("meta_ad_account_id", ""),
     }
 
 

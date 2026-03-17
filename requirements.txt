@@ -12,3 +12,4 @@ aiofiles
 httpx
 playwright
 apscheduler
+facebook-business

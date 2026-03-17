@@ -70,12 +70,121 @@ export default function Settings() {
   const [savingAlert,  setSavingAlert]  = useState(false);
   const [msg,          setMsg]          = useState(null);
 
+  // Meta Ads
+  const [metaConnected,     setMetaConnected]     = useState(false);
+  const [metaConnectedName, setMetaConnectedName] = useState('');
+  const [metaAdAccountId,   setMetaAdAccountId]   = useState('');
+  const [adAccounts,        setAdAccounts]        = useState([]);
+  const [selectedAccount,   setSelectedAccount]   = useState('');
+  const [connectingMeta,    setConnectingMeta]     = useState(false);
+  const [savingAccount,     setSavingAccount]      = useState(false);
+  const [disconnectingMeta, setDisconnectingMeta]  = useState(false);
+  const [metaMsg,           setMetaMsg]            = useState(null);
+  const [fbReady,           setFbReady]            = useState(false);
+
   // SMS integration
   const [smsToken,       setSmsToken]       = useState('');
   const [smsIntakeUrl,   setSmsIntakeUrl]   = useState('');
   const [loadingSms,     setLoadingSms]     = useState(true);
   const [regenerating,   setRegenerating]   = useState(false);
   const [copied,         setCopied]         = useState(false);
+
+  // Load FB JS SDK + init with Meta App ID
+  useEffect(() => {
+    authFetch('/meta/config')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.app_id) return;
+        window.fbAsyncInit = () => {
+          window.FB.init({ appId: d.app_id, cookie: true, version: 'v21.0' });
+          setFbReady(true);
+        };
+        if (!document.getElementById('fb-sdk')) {
+          const s = document.createElement('script');
+          s.id  = 'fb-sdk';
+          s.src = 'https://connect.facebook.net/en_US/sdk.js';
+          s.async = true;
+          document.body.appendChild(s);
+        } else {
+          setFbReady(true); // already loaded
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Populate meta status from /settings load (runs after the Bosta settings useEffect)
+  useEffect(() => {
+    authFetch('/settings')
+      .then(r => r.json())
+      .then(d => {
+        setMetaConnected(!!d.meta_connected);
+        setMetaConnectedName(d.meta_connected_name || '');
+        setMetaAdAccountId(d.meta_ad_account_id || '');
+        setSelectedAccount(d.meta_ad_account_id || '');
+      })
+      .catch(() => {});
+  }, []);
+
+  async function connectFacebook() {
+    if (!window.FB) { setMetaMsg({ type: 'error', text: 'Facebook SDK not loaded yet. Try again in a moment.' }); return; }
+    setConnectingMeta(true);
+    setMetaMsg(null);
+    window.FB.login(async (response) => {
+      if (response.status !== 'connected') {
+        setConnectingMeta(false);
+        return;
+      }
+      try {
+        const res  = await authFetch('/meta/auth', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: response.authResponse.accessToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) { setMetaMsg({ type: 'error', text: data.detail || 'Connection failed.' }); return; }
+        setMetaConnected(true);
+        setMetaConnectedName(data.connected_name || '');
+        setAdAccounts(data.ad_accounts || []);
+        if (data.ad_accounts?.length === 1) setSelectedAccount(data.ad_accounts[0].id);
+      } catch (e) {
+        setMetaMsg({ type: 'error', text: `Error: ${e.message}` });
+      } finally {
+        setConnectingMeta(false);
+      }
+    }, { scope: 'ads_read,ads_management' });
+  }
+
+  async function saveAdAccount() {
+    if (!selectedAccount) return;
+    setSavingAccount(true);
+    setMetaMsg(null);
+    const res = await authFetch('/meta/select-account', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ad_account_id: selectedAccount }),
+    });
+    setSavingAccount(false);
+    if (res.ok) {
+      setMetaAdAccountId(selectedAccount);
+      setMetaMsg({ type: 'success', text: 'Ad account saved.' });
+    } else {
+      setMetaMsg({ type: 'error', text: 'Failed to save ad account.' });
+    }
+  }
+
+  async function disconnectMeta() {
+    if (!window.confirm('Disconnect Meta Ads? Spend data will no longer appear.')) return;
+    setDisconnectingMeta(true);
+    setMetaMsg(null);
+    const res = await authFetch('/meta/disconnect', { method: 'DELETE' });
+    setDisconnectingMeta(false);
+    if (res.ok) {
+      setMetaConnected(false);
+      setMetaConnectedName('');
+      setMetaAdAccountId('');
+      setSelectedAccount('');
+      setAdAccounts([]);
+      setMetaMsg({ type: 'success', text: 'Disconnected.' });
+    }
+  }
 
   useEffect(() => {
     authFetch('/sms/token')
@@ -329,6 +438,82 @@ export default function Settings() {
         <Btn onClick={saveAlert} disabled={savingAlert || loading}>
           {savingAlert ? 'Saving…' : 'Save Alert Settings'}
         </Btn>
+      </Card>
+
+      {/* ── Meta Ads Integration ── */}
+      <Card>
+        <CardTitle>Meta Ads Integration</CardTitle>
+        <p style={{ color: 'var(--muted)', fontSize: '.9rem', marginBottom: '1.5rem', marginTop: '.5rem' }}>
+          Connect your Facebook account to pull ad spend data into the dashboard, Bosta reports, and BI assistant.
+        </p>
+
+        {metaMsg && <Alert type={metaMsg.type} onClose={() => setMetaMsg(null)} style={{ marginBottom: '1rem' }}>{metaMsg.text}</Alert>}
+
+        {!metaConnected ? (
+          <Btn onClick={connectFacebook} disabled={connectingMeta}>
+            {connectingMeta ? 'Connecting…' : '🔗 Connect Facebook'}
+          </Btn>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: '.85rem', fontWeight: 600, color: '#1877f2',
+                background: 'rgba(24,119,242,.1)', border: '1px solid rgba(24,119,242,.25)',
+                borderRadius: '20px', padding: '.25rem .75rem',
+              }}>
+                ✓ Connected as {metaConnectedName}
+              </span>
+              <button
+                onClick={disconnectMeta}
+                disabled={disconnectingMeta}
+                style={{
+                  background: 'transparent', border: '1px solid var(--danger)',
+                  color: 'var(--danger)', borderRadius: 'var(--radius-sm)',
+                  padding: '.3rem .65rem', cursor: 'pointer', fontSize: '.8rem',
+                }}
+              >
+                {disconnectingMeta ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Ad Account</label>
+              {adAccounts.length > 0 ? (
+                <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                  <select
+                    value={selectedAccount}
+                    onChange={e => setSelectedAccount(e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }}
+                  >
+                    <option value="">— Select an ad account —</option>
+                    {adAccounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+                    ))}
+                  </select>
+                  <Btn onClick={saveAdAccount} disabled={savingAccount || !selectedAccount}>
+                    {savingAccount ? 'Saving…' : 'Save'}
+                  </Btn>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                  <input
+                    readOnly
+                    value={metaAdAccountId || 'No ad account selected'}
+                    style={{ ...inputStyle, color: 'var(--muted)', fontFamily: 'monospace', flex: 1 }}
+                  />
+                  <Btn variant="outline" onClick={connectFacebook} disabled={connectingMeta}>
+                    {connectingMeta ? 'Loading…' : 'Re-fetch accounts'}
+                  </Btn>
+                </div>
+              )}
+              {metaAdAccountId && adAccounts.length === 0 && (
+                <p style={{ fontSize: '.8rem', color: 'var(--muted)', marginTop: '.4rem' }}>
+                  Current: <code style={{ fontFamily: 'monospace' }}>{metaAdAccountId}</code>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* ── Bank SMS Integration ── */}

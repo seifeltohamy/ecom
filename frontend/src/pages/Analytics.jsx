@@ -17,6 +17,15 @@ export default function Analytics() {
   const [stockData,   setStockData]   = useState(null);
   const [stockLoading, setStockLoading] = useState(false);
 
+  // Meta Ads campaigns
+  const today0 = new Date();
+  const [metaCampaigns,     setMetaCampaigns]     = useState(null);  // null=loading, false=not connected
+  const [metaCampLoading,   setMetaCampLoading]   = useState(false);
+  const [metaCampDateFrom,  setMetaCampDateFrom]  = useState(
+    new Date(today0.getFullYear(), today0.getMonth(), 1).toISOString().slice(0, 10)
+  );
+  const [metaCampDateTo,    setMetaCampDateTo]    = useState(today0.toISOString().slice(0, 10));
+
   const loadMonths = useCallback(async () => {
     const res  = await authFetch('/cashflow/months');
     const data = await res.json();
@@ -42,6 +51,21 @@ export default function Analytics() {
   }, [loadMonths]);
 
   useEffect(() => { loadRows(activeMonth); }, [activeMonth, loadRows]);
+
+  const loadMetaCampaigns = useCallback(async (dateFrom, dateTo) => {
+    setMetaCampLoading(true);
+    try {
+      const res  = await authFetch(`/meta/campaigns?date_from=${dateFrom}&date_to=${dateTo}`);
+      const data = await res.json();
+      setMetaCampaigns(data?.connected ? data.rows : false);
+    } catch {
+      setMetaCampaigns(false);
+    } finally {
+      setMetaCampLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadMetaCampaigns(metaCampDateFrom, metaCampDateTo); }, [metaCampDateFrom, metaCampDateTo, loadMetaCampaigns]);
 
   const loadStock = async () => {
     setStockLoading(true);
@@ -211,6 +235,85 @@ export default function Analytics() {
                       <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.25rem', color }}>{value}</div>
                     </div>
                   ))}
+                </div>
+              );
+            })()}
+          </Card>
+
+          {/* ── Meta Campaigns ── */}
+          <Card>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.75rem', marginBottom: '1rem' }}>
+              <CardTitle style={{ margin: 0 }}>Meta Campaigns</CardTitle>
+              <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <input
+                  type="date"
+                  value={metaCampDateFrom}
+                  onChange={e => setMetaCampDateFrom(e.target.value)}
+                  style={{ padding: '.35rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                />
+                <span style={{ color: 'var(--muted)', fontSize: '.85rem' }}>→</span>
+                <input
+                  type="date"
+                  value={metaCampDateTo}
+                  onChange={e => setMetaCampDateTo(e.target.value)}
+                  style={{ padding: '.35rem .6rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '.85rem' }}
+                />
+              </div>
+            </div>
+
+            {metaCampLoading && <Alert type="loading">Loading campaigns…</Alert>}
+            {!metaCampLoading && metaCampaigns === false && (
+              <div style={{ color: 'var(--muted)', fontSize: '.9rem', padding: '.75rem 0' }}>
+                Connect Meta Ads in <strong>Settings</strong> to see campaign performance here.
+              </div>
+            )}
+            {!metaCampLoading && Array.isArray(metaCampaigns) && metaCampaigns.length === 0 && (
+              <div style={{ color: 'var(--muted)', fontSize: '.9rem' }}>No campaigns found for this date range.</div>
+            )}
+            {!metaCampLoading && Array.isArray(metaCampaigns) && metaCampaigns.length > 0 && (() => {
+              const totalResults = metaCampaigns.reduce((s, r) => s + (r.results || 0), 0);
+              const totalSpend   = metaCampaigns.reduce((s, r) => s + (r.spend   || 0), 0);
+              const avgRoas      = metaCampaigns.filter(r => r.roas).length
+                ? (metaCampaigns.reduce((s, r) => s + (r.roas || 0), 0) / metaCampaigns.filter(r => r.roas).length)
+                : null;
+              const th = { padding: '.5rem .75rem', textAlign: 'left', fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' };
+              const td = (align = 'left') => ({ padding: '.5rem .75rem', borderBottom: '1px solid var(--border)', textAlign: align, fontSize: '.88rem' });
+              return (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={th}>Campaign</th>
+                        <th style={{ ...th, textAlign: 'right' }}>Results</th>
+                        <th style={{ ...th, textAlign: 'right' }}>CPR (EGP)</th>
+                        <th style={{ ...th, textAlign: 'right' }}>Amount Spent</th>
+                        <th style={{ ...th, textAlign: 'right' }}>Purchase ROAS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metaCampaigns.map((r, i) => (
+                        <tr key={i}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.03)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            style={{ transition: 'background .1s' }}>
+                          <td style={td()}>{r.campaign_name}</td>
+                          <td style={{ ...td('right'), fontWeight: 600 }}>{r.results}</td>
+                          <td style={{ ...td('right'), color: 'var(--muted)' }}>{r.cpr != null ? `EGP ${fmt(r.cpr)}` : '—'}</td>
+                          <td style={{ ...td('right'), color: 'var(--danger)' }}>EGP {fmt(r.spend)}</td>
+                          <td style={{ ...td('right'), color: r.roas >= 1 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>{r.roas != null ? `${r.roas}×` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: 'var(--surface2)' }}>
+                        <td style={{ ...td(), fontWeight: 700 }}>Total</td>
+                        <td style={{ ...td('right'), fontWeight: 700 }}>{totalResults}</td>
+                        <td style={td('right')}>—</td>
+                        <td style={{ ...td('right'), fontWeight: 700, color: 'var(--danger)' }}>EGP {fmt(totalSpend)}</td>
+                        <td style={{ ...td('right'), fontWeight: 700, color: avgRoas >= 1 ? 'var(--success)' : 'var(--muted)' }}>{avgRoas != null ? `${avgRoas.toFixed(2)}×` : '—'}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               );
             })()}

@@ -13,6 +13,18 @@ export default function Home() {
   const [loading,       setLoading]       = useState(true);
   const [months,        setMonths]        = useState([]);
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [metaData,      setMetaData]      = useState(null); // null = loading, false = not connected
+
+  // Fetch Meta spend for current month
+  useEffect(() => {
+    const today     = new Date();
+    const date_from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+    const date_to   = today.toISOString().slice(0, 10);
+    authFetch(`/meta/summary?date_from=${date_from}&date_to=${date_to}`)
+      .then(r => r.json())
+      .then(d => setMetaData(d?.connected ? d : false))
+      .catch(() => setMetaData(false));
+  }, []);
 
   useEffect(() => {
     authFetch('/cashflow/months')
@@ -82,6 +94,19 @@ export default function Home() {
               <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(summary.total_out_ytd)}</div>
             </div>
           </div>
+
+          {metaData && (
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <div style={cs}>
+                <div style={ls}>Meta Ads — Spend This Month</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(metaData.spend)}</div>
+              </div>
+              <div style={cs}>
+                <div style={ls}>Meta Ads — Balance Remaining</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--success)' }}>EGP {fmt(metaData.balance)}</div>
+              </div>
+            </div>
+          )}
 
           {summary.last_report && (
             <Card>

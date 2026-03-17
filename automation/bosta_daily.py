@@ -254,8 +254,38 @@ def sort_only(path: str) -> tuple[str, str, str]:
 
 # ── Step 4: Upload to EcomHQ ──────────────────────────────────────────────────
 
+def set_meta_ads_spent(brand_token: str, report_id: int,
+                       date_from: str, date_to: str) -> None:
+    """Fetch Meta spend for the report's date range and save it on the report."""
+    try:
+        r = httpx.get(
+            f"{ECOMHQ_URL}/meta/summary",
+            headers={"Authorization": f"Bearer {brand_token}"},
+            params={"date_from": date_from, "date_to": date_to},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            log.info(f"  Meta summary: HTTP {r.status_code} — skipping ads_spent")
+            return
+        data = r.json()
+        spend = data.get("spend", 0)
+        if not spend:
+            log.info("  Meta summary: no spend data for this period — skipping ads_spent")
+            return
+        httpx.put(
+            f"{ECOMHQ_URL}/reports/{report_id}/pl",
+            headers={"Authorization": f"Bearer {brand_token}"},
+            json={"ads_spent": spend, "items": []},
+            timeout=15,
+        )
+        log.info(f"  Meta ads_spent auto-set: {spend} EGP")
+    except Exception as e:
+        log.warning(f"  Meta ads_spent auto-set failed (non-fatal): {e}")
+
+
 def upload_to_ecomhq(admin_token: str, brand_id: int,
-                     file_path: str, date_from: str, date_to: str) -> dict:
+                     file_path: str, date_from: str, date_to: str) -> tuple[dict, str]:
+    """Returns (report_dict, brand_token)."""
     r = httpx.post(f"{ECOMHQ_URL}/auth/select-brand",
                    json={"brand_id": brand_id},
                    headers={"Authorization": f"Bearer {admin_token}"},
@@ -275,7 +305,7 @@ def upload_to_ecomhq(admin_token: str, brand_id: int,
             timeout=120,
         )
     r.raise_for_status()
-    return r.json()
+    return r.json(), brand_token
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -321,12 +351,16 @@ def main():
                 link = fetch_export_from_email(email, email_password)
                 path = download_from_link(link, tmp)
                 sorted_path, date_from, date_to = sort_then_filter(path)
-                result = upload_to_ecomhq(admin_token, brand_id, sorted_path, date_from, date_to)
+                result, brand_token = upload_to_ecomhq(admin_token, brand_id, sorted_path, date_from, date_to)
                 log.info(
                     f"  Uploaded OK — report_id={result.get('report_id')}, "
                     f"orders={result.get('order_count')}, "
                     f"revenue={result.get('grand_revenue')}"
                 )
+                # Auto-fill ads_spent from Meta API (non-fatal if brand not connected)
+                report_id = result.get("report_id") or result.get("id")
+                if report_id:
+                    set_meta_ads_spent(brand_token, report_id, date_from, date_to)
         except Exception as e:
             log.exception(f"  Brand '{name}' failed: {e}")
 
