@@ -114,8 +114,8 @@ def fetch_export_from_email(gmail_user: str, gmail_app_password: str,
 
     deadline = triggered_at + timeout
     while time.time() < deadline:
-        # Re-select inbox each iteration to refresh
-        mail.select("inbox")
+        # Search All Mail (catches Inbox, Promotions, Spam, etc.)
+        mail.select('"[Gmail]/All Mail"')
 
         # Broad search — just FROM bosta.co, no subject filter
         _, msgs = mail.search(None, 'FROM "bosta.co"')

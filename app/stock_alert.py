@@ -112,21 +112,23 @@ def _fetch_stock_rows(brand_id: int, settings: dict) -> list:
 
 # ── Email building ─────────────────────────────────────────────────────────────
 
-def _row_color(row: dict) -> str:
+def _row_color(row: dict, low_stock_days: int) -> str:
     if row["on_hand"] == 0:
         return "#ffd5d5"
     dr = row["days_remaining"]
     if dr is not None and dr < 7:
         return "#ffe5c0"
-    return "#fffbd0"
+    if dr is not None and dr < low_stock_days:
+        return "#fffbd0"
+    return "#ffffff"
 
 
-def _build_html(brand_name: str, rows: list, low_stock_days: int) -> str:
+def _build_html(brand_name: str, rows: list, low_stock_days: int, daily_report: bool = False) -> str:
     now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     rows_html = ""
     for r in rows:
-        color     = _row_color(r)
+        color     = _row_color(r, low_stock_days)
         status    = ("Out of stock" if r["on_hand"] == 0 else
                      (f"{r['days_remaining']} days" if r["days_remaining"] is not None else "No sales data"))
         daily_str = f"{r['avg_daily']:.1f} units/day" if r["avg_daily"] > 0 else "—"
@@ -139,13 +141,22 @@ def _build_html(brand_name: str, rows: list, low_stock_days: int) -> str:
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">{daily_str}</td>
         </tr>"""
 
+    if daily_report:
+        header_bg    = "#2563eb"
+        header_title = "📦 EcomHQ Daily Inventory Report"
+        header_sub   = f"{brand_name} — {len(rows)} product(s)"
+    else:
+        header_bg    = "#f97316"
+        header_title = "⚠️ EcomHQ Low Stock Alert"
+        header_sub   = f"{brand_name} — {len(rows)} item(s) need attention"
+
     return f"""<!DOCTYPE html>
 <html>
 <body style="font-family:sans-serif;background:#f9fafb;margin:0;padding:24px;">
   <div style="max-width:700px;margin:auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
-    <div style="background:#f97316;padding:20px 28px;">
-      <h1 style="margin:0;color:#fff;font-size:1.2rem;">⚠️ EcomHQ Low Stock Alert</h1>
-      <p style="margin:4px 0 0;color:rgba(255,255,255,.85);font-size:.9rem;">{brand_name} — {len(rows)} item(s) need attention</p>
+    <div style="background:{header_bg};padding:20px 28px;">
+      <h1 style="margin:0;color:#fff;font-size:1.2rem;">{header_title}</h1>
+      <p style="margin:4px 0 0;color:rgba(255,255,255,.85);font-size:.9rem;">{header_sub}</p>
     </div>
     <div style="padding:24px 28px;">
       <table style="width:100%;border-collapse:collapse;font-size:.9rem;">
@@ -161,11 +172,12 @@ def _build_html(brand_name: str, rows: list, low_stock_days: int) -> str:
         <tbody>{rows_html}
         </tbody>
       </table>
-      <div style="margin-top:20px;padding:12px 16px;background:#fef3c7;border-radius:6px;font-size:.82rem;color:#92400e;">
+      <div style="margin-top:20px;padding:12px 16px;background:#f0f9ff;border-radius:6px;font-size:.82rem;color:#075985;">
         <strong>Color legend:</strong>
         <span style="margin-left:8px;">🔴 Out of stock</span>
-        <span style="margin-left:12px;">🟠 Less than 7 days</span>
-        <span style="margin-left:12px;">🟡 Less than {low_stock_days} days</span>
+        <span style="margin-left:12px;">🟠 &lt; 7 days</span>
+        <span style="margin-left:12px;">🟡 &lt; {low_stock_days} days</span>
+        <span style="margin-left:12px;">⚪ Healthy</span>
       </div>
     </div>
     <div style="padding:12px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:.78rem;color:#9ca3af;">
@@ -237,26 +249,34 @@ def run_stock_alert_job():
                 logger.info("Brand %s (%s): no stock data, skipping", brand_id, brand_name)
                 continue
 
-            low = [
-                r for r in all_rows
-                if r["on_hand"] == 0
-                or (r["days_remaining"] is not None and r["days_remaining"] < low_stock_days)
-            ]
-
-            if not low:
-                logger.info("Brand %s (%s): all stock healthy, no email sent", brand_id, brand_name)
-                continue
-
-            # Sort: out-of-stock first, then by days_remaining asc
-            low.sort(key=lambda r: (
+            # Sort all rows: out-of-stock first, then by days_remaining asc, then healthy
+            all_rows.sort(key=lambda r: (
                 r["on_hand"] > 0,
                 r["days_remaining"] if r["days_remaining"] is not None else 9999,
             ))
 
-            subject = f"⚠️ EcomHQ Low Stock Alert — {brand_name} — {len(low)} item(s) need attention"
-            html    = _build_html(brand_name, low, low_stock_days)
-            _send_email(email, password, subject, html)
-            logger.info("Brand %s (%s): sent alert for %d items", brand_id, brand_name, len(low))
+            is_morning = (time_1 and now_hm == time_1)
+
+            if is_morning:
+                # Morning: always send full inventory report
+                subject = f"📦 EcomHQ Daily Inventory — {brand_name} — {len(all_rows)} product(s)"
+                html    = _build_html(brand_name, all_rows, low_stock_days, daily_report=True)
+                _send_email(email, password, subject, html)
+                logger.info("Brand %s (%s): sent daily inventory report (%d products)", brand_id, brand_name, len(all_rows))
+            else:
+                # Evening: send only low-stock alert, skip if all healthy
+                low = [
+                    r for r in all_rows
+                    if r["on_hand"] == 0
+                    or (r["days_remaining"] is not None and r["days_remaining"] < low_stock_days)
+                ]
+                if not low:
+                    logger.info("Brand %s (%s): all stock healthy, no evening alert sent", brand_id, brand_name)
+                    continue
+                subject = f"⚠️ EcomHQ Low Stock Alert — {brand_name} — {len(low)} item(s) need attention"
+                html    = _build_html(brand_name, low, low_stock_days, daily_report=False)
+                _send_email(email, password, subject, html)
+                logger.info("Brand %s (%s): sent low-stock alert for %d items", brand_id, brand_name, len(low))
 
         except Exception as exc:
             logger.error("Brand %s (%s): error — %s", brand_id, brand_name, exc, exc_info=True)
