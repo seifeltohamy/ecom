@@ -65,8 +65,11 @@ export default function Home() {
 
   useEffect(() => {
     const today     = new Date();
-    const date_from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-    const date_to   = today.toISOString().slice(0, 10);
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const date_from = `${y}-${m}-01`;
+    const date_to   = `${y}-${m}-${d}`;
     authFetch(`/meta/summary?date_from=${date_from}&date_to=${date_to}`)
       .then(r => r.json())
       .then(d => setMetaData(d?.connected ? d : false))

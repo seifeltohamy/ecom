@@ -19,12 +19,11 @@ export default function Analytics() {
 
   // Meta Ads campaigns
   const today0 = new Date();
+  const _y = today0.getFullYear(), _m = String(today0.getMonth() + 1).padStart(2, '0'), _d = String(today0.getDate()).padStart(2, '0');
   const [metaCampaigns,     setMetaCampaigns]     = useState(null);  // null=loading, false=not connected
   const [metaCampLoading,   setMetaCampLoading]   = useState(false);
-  const [metaCampDateFrom,  setMetaCampDateFrom]  = useState(
-    new Date(today0.getFullYear(), today0.getMonth(), 1).toISOString().slice(0, 10)
-  );
-  const [metaCampDateTo,    setMetaCampDateTo]    = useState(today0.toISOString().slice(0, 10));
+  const [metaCampDateFrom,  setMetaCampDateFrom]  = useState(`${_y}-${_m}-01`);
+  const [metaCampDateTo,    setMetaCampDateTo]    = useState(`${_y}-${_m}-${_d}`);
 
   const loadMonths = useCallback(async () => {
     const res  = await authFetch('/cashflow/months');
