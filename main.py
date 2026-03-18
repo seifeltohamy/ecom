@@ -9,7 +9,9 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse as _FileResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -18,7 +20,30 @@ from app.stock_alert import run_stock_alert_job
 from app.bosta_payout import run_bosta_payout_check
 from app.meta_balance_alert import run_meta_balance_alert_job
 
+PROJECT_DIR = Path(__file__).parent
+DIST        = PROJECT_DIR / "frontend" / "dist"
+INDEX_HTML  = DIST / "index.html"
+
 app = FastAPI(title="EcomHQ")
+
+# ── SPA middleware — browser page refreshes always get index.html ──────────────
+# Browsers send Accept: text/html for page navigations; API fetch() calls don't.
+# Without this, GET /settings hits the API endpoint instead of the React app.
+if INDEX_HTML.exists():
+    class SPAMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            accept = request.headers.get("accept", "")
+            path   = request.url.path
+            if (
+                request.method == "GET"
+                and "text/html" in accept
+                and not path.startswith("/assets")
+                and not path.startswith("/api")
+            ):
+                return _FileResponse(str(INDEX_HTML))
+            return await call_next(request)
+
+    app.add_middleware(SPAMiddleware)
 
 # ── Stock alert scheduler (09:00 + 18:00 UTC daily) ───────────────────────────
 _scheduler = BackgroundScheduler(timezone="UTC")
@@ -41,17 +66,14 @@ app.include_router(meta.router)
 # ── SPA / static file serving ─────────────────────────────────────────────────
 
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
-
-PROJECT_DIR = Path(__file__).parent
-DIST = PROJECT_DIR / "frontend" / "dist"
+from fastapi.responses import HTMLResponse
 
 if DIST.exists():
     app.mount("/assets", StaticFiles(directory=str(DIST / "assets")), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str = ""):  # noqa: ARG001
-        return FileResponse(str(DIST / "index.html"))
+        return _FileResponse(str(INDEX_HTML))
 else:
     @app.get("/", response_class=HTMLResponse)
     def serve_dev():
