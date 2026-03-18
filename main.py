@@ -9,7 +9,7 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import FileResponse as _FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -24,24 +24,6 @@ DIST        = PROJECT_DIR / "frontend" / "dist"
 INDEX_HTML  = DIST / "index.html"
 
 app = FastAPI(title="EcomHQ")
-
-# ── SPA page-refresh fix ───────────────────────────────────────────────────────
-# Browser page navigations send Accept: text/html — return index.html directly.
-# API fetch() calls send Accept: */* — pass through to the actual route handler.
-# This runs before any route matching, so /settings refresh no longer hits the
-# FastAPI GET /settings endpoint unauthenticated.
-@app.middleware("http")
-async def spa_middleware(request: Request, call_next):
-    accept = request.headers.get("accept", "")
-    path   = request.url.path
-    if (
-        request.method == "GET"
-        and "text/html" in accept
-        and not path.startswith("/assets")
-        and INDEX_HTML.exists()
-    ):
-        return _FileResponse(str(INDEX_HTML))
-    return await call_next(request)
 
 # ── Stock alert scheduler (09:00 + 18:00 UTC daily) ───────────────────────────
 _scheduler = BackgroundScheduler(timezone="UTC")
