@@ -7,14 +7,14 @@ import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
 import Badge from '../components/Badge.jsx';
 
-// Color palette — no more plain green/red
+// Color palette
 const C = {
-  in:      '#38bdf8',   // sky blue
-  out:     '#fb923c',   // warm orange
-  net:     '#a78bfa',   // violet
-  netNeg:  '#f43f5e',   // rose
-  meta:    '#1877f2',   // facebook blue
-  balance: '#34d399',   // emerald
+  in:      'var(--accent)',  // orange
+  out:     'var(--accent)',  // orange
+  net:     'var(--accent)',  // orange
+  netNeg:  'var(--accent)',  // orange (consistent)
+  meta:    '#1877f2',        // facebook blue
+  balance: '#34d399',        // emerald
 };
 
 function KpiCard({ label, value, color, sub }) {
@@ -97,7 +97,6 @@ export default function Home() {
       .catch(() => setLoading(false));
   }, [selectedMonth]);
 
-  const netColor = summary?.this_month_net >= 0 ? C.net : C.netNeg;
 
   return (
     <div>
@@ -129,12 +128,7 @@ export default function Home() {
           <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
             <KpiCard label="Money In"  value={summary.this_month_in}  color={C.in} />
             <KpiCard label="Money Out" value={summary.this_month_out} color={C.out} />
-            <KpiCard
-              label="Net"
-              value={summary.this_month_net}
-              color={netColor}
-              sub={summary.this_month_net >= 0 ? 'Profitable month' : 'Month in deficit'}
-            />
+            <KpiCard label="Net"       value={summary.this_month_net} color={C.net} />
           </div>
 
           {/* YTD */}
