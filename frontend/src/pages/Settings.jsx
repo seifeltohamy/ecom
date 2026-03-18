@@ -76,11 +76,13 @@ export default function Settings() {
   const [metaAdAccountId,   setMetaAdAccountId]   = useState('');
   const [adAccounts,        setAdAccounts]        = useState([]);
   const [selectedAccount,   setSelectedAccount]   = useState('');
-  const [connectingMeta,    setConnectingMeta]     = useState(false);
-  const [savingAccount,     setSavingAccount]      = useState(false);
-  const [disconnectingMeta, setDisconnectingMeta]  = useState(false);
-  const [metaMsg,           setMetaMsg]            = useState(null);
-  const [fbReady,           setFbReady]            = useState(false);
+  const [connectingMeta,       setConnectingMeta]       = useState(false);
+  const [savingAccount,        setSavingAccount]         = useState(false);
+  const [disconnectingMeta,    setDisconnectingMeta]     = useState(false);
+  const [metaMsg,              setMetaMsg]               = useState(null);
+  const [fbReady,              setFbReady]               = useState(false);
+  const [metaBalanceThreshold, setMetaBalanceThreshold]  = useState('5000');
+  const [savingMetaThreshold,  setSavingMetaThreshold]   = useState(false);
 
   // SMS integration
   const [smsToken,       setSmsToken]       = useState('');
@@ -123,6 +125,7 @@ export default function Settings() {
         setMetaConnectedName(d.meta_connected_name || '');
         setMetaAdAccountId(d.meta_ad_account_id || '');
         setSelectedAccount(d.meta_ad_account_id || '');
+        setMetaBalanceThreshold(d.meta_balance_threshold || '5000');
       })
       .catch(() => {});
   }, []);
@@ -184,6 +187,20 @@ export default function Settings() {
       setAdAccounts([]);
       setMetaMsg({ type: 'success', text: 'Disconnected.' });
     }
+  }
+
+  async function saveMetaThreshold() {
+    setSavingMetaThreshold(true);
+    setMetaMsg(null);
+    const res = await authFetch('/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ meta_balance_threshold: metaBalanceThreshold }),
+    });
+    setSavingMetaThreshold(false);
+    setMetaMsg(res.ok
+      ? { type: 'success', text: 'Balance alert threshold saved.' }
+      : { type: 'error',   text: 'Failed to save threshold.' });
   }
 
   useEffect(() => {
@@ -555,6 +572,32 @@ export default function Settings() {
                   </Btn>
                 </div>
               )}
+            </div>
+
+            {/* Balance alert threshold */}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <label style={labelStyle}>Balance Alert Threshold</label>
+              <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <span style={{
+                    position: 'absolute', left: '.75rem', top: '50%', transform: 'translateY(-50%)',
+                    fontSize: '.8rem', color: 'var(--muted)', pointerEvents: 'none',
+                  }}>EGP</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={metaBalanceThreshold}
+                    onChange={e => setMetaBalanceThreshold(e.target.value)}
+                    style={{ ...inputStyle, paddingLeft: '2.75rem', width: '100%' }}
+                  />
+                </div>
+                <Btn onClick={saveMetaThreshold} disabled={savingMetaThreshold}>
+                  {savingMetaThreshold ? 'Saving…' : 'Save'}
+                </Btn>
+              </div>
+              <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.4rem' }}>
+                An email alert is sent every 10 minutes when your Meta Ads balance drops below this amount.
+              </p>
             </div>
           </div>
         )}

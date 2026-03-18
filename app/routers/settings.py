@@ -17,7 +17,8 @@ class SettingsUpdate(BaseModel):
     alert_enabled:        str | None = None
     alert_time_1:         str | None = None
     alert_time_2:         str | None = None
-    alert_low_stock_days: str | None = None
+    alert_low_stock_days:      str | None = None
+    meta_balance_threshold:    str | None = None
 
 
 @router.get("/settings")
@@ -35,9 +36,10 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         "alert_time_2":         data.get("alert_time_2", "18:00"),
         "alert_low_stock_days": data.get("alert_low_stock_days", "30"),
         # Meta Ads — token never exposed; only derived status
-        "meta_connected":       bool(data.get("meta_access_token")),
-        "meta_connected_name":  data.get("meta_connected_name", ""),
-        "meta_ad_account_id":   data.get("meta_ad_account_id", ""),
+        "meta_connected":           bool(data.get("meta_access_token")),
+        "meta_connected_name":      data.get("meta_connected_name", ""),
+        "meta_ad_account_id":       data.get("meta_ad_account_id", ""),
+        "meta_balance_threshold":   data.get("meta_balance_threshold", "5000"),
     }
 
 
@@ -51,7 +53,8 @@ def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_i
         "alert_enabled":        payload.alert_enabled        if payload.alert_enabled is not None else "true",
         "alert_time_1":         payload.alert_time_1         if payload.alert_time_1  is not None else "09:00",
         "alert_time_2":         payload.alert_time_2         if payload.alert_time_2  is not None else "18:00",
-        "alert_low_stock_days": payload.alert_low_stock_days if payload.alert_low_stock_days is not None else "30",
+        "alert_low_stock_days":   payload.alert_low_stock_days   if payload.alert_low_stock_days   is not None else "30",
+        "meta_balance_threshold": payload.meta_balance_threshold if payload.meta_balance_threshold is not None else "5000",
     }
     with get_db() as db:
         for k, v in updates.items():
