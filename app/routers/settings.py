@@ -188,7 +188,7 @@ def trigger_stock_alert(_admin: models.User = Depends(require_admin)):
     """Manually fire the stock alert job right now (admin only)."""
     from app.stock_alert import run_stock_alert_job
     import threading
-    threading.Thread(target=run_stock_alert_job, daemon=True).start()
+    threading.Thread(target=lambda: run_stock_alert_job(force=True), daemon=True).start()
     return {"ok": True, "message": "Stock alert job started — check server logs."}
 
 

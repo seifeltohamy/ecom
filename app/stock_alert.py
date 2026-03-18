@@ -206,10 +206,11 @@ def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
 
 # ── Main job ───────────────────────────────────────────────────────────────────
 
-def run_stock_alert_job():
-    """Called by APScheduler every hour on the hour. Each brand's configured times gate sending."""
+def run_stock_alert_job(force: bool = False):
+    """Called by APScheduler every hour on the hour. Each brand's configured times gate sending.
+    Pass force=True to bypass the time gate (used by manual trigger endpoint)."""
     now_hm = datetime.now(tz=timezone.utc).strftime("%H:%M")
-    logger.info("Stock alert job running at %s UTC", now_hm)
+    logger.info("Stock alert job running at %s UTC (force=%s)", now_hm, force)
 
     brands = _get_all_brands()
     for brand in brands:
@@ -227,8 +228,8 @@ def run_stock_alert_job():
             time_1 = settings.get("alert_time_1", "09:00")
             time_2 = settings.get("alert_time_2", "18:00")
             matched = (time_1 and now_hm == time_1) or (time_2 and now_hm == time_2)
-            if not matched:
-                logger.debug("Brand %s (%s): time %s not in [%s, %s], skipping", brand_id, brand_name, now_hm, time_1, time_2)
+            if not matched and not force:
+                logger.info("Brand %s (%s): time %s not in [%s, %s], skipping", brand_id, brand_name, now_hm, time_1, time_2)
                 continue
 
             # Credentials
