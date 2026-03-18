@@ -253,19 +253,23 @@ export default function Settings() {
     alert_low_stock_days: alertDays,
   });
 
+  // Only include credential fields if non-empty — prevents wiping saved values when state isn't loaded
+  function _credPayload() {
+    const p = {};
+    if (apiKey.trim())           p.bosta_api_key        = apiKey.trim();
+    if (bostaEmail.trim())       p.bosta_email          = bostaEmail.trim();
+    if (bostaPassword)           p.bosta_password       = bostaPassword;
+    if (bostaEmailPassword)      p.bosta_email_password = bostaEmailPassword;
+    return p;
+  }
+
   async function save() {
     setSaving(true);
     setMsg(null);
     const res = await authFetch('/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bosta_api_key:        apiKey.trim(),
-        bosta_email:          bostaEmail.trim(),
-        bosta_password:       bostaPassword,
-        bosta_email_password: bostaEmailPassword,
-        ..._alertPayload(),
-      }),
+      body: JSON.stringify({ ..._credPayload(), ..._alertPayload() }),
     });
     setSaving(false);
     setMsg(res.ok
@@ -279,13 +283,7 @@ export default function Settings() {
     const res = await authFetch('/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bosta_api_key:        apiKey.trim(),
-        bosta_email:          bostaEmail.trim(),
-        bosta_password:       bostaPassword,
-        bosta_email_password: bostaEmailPassword,
-        ..._alertPayload(),
-      }),
+      body: JSON.stringify({ ..._credPayload(), ..._alertPayload() }),
     });
     setSavingAlert(false);
     setMsg(res.ok

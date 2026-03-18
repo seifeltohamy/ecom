@@ -43,18 +43,14 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
     }
 
 
+_CREDENTIAL_KEYS = {"bosta_api_key", "bosta_email", "bosta_password", "bosta_email_password"}
+
 @router.put("/settings")
 def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
+    # Skip None values; also skip empty-string credentials (never overwrite a saved key with "")
     updates = {
-        "bosta_api_key":        payload.bosta_api_key        or "",
-        "bosta_email":          payload.bosta_email           or "",
-        "bosta_password":       payload.bosta_password        or "",
-        "bosta_email_password": payload.bosta_email_password  or "",
-        "alert_enabled":        payload.alert_enabled        if payload.alert_enabled is not None else "true",
-        "alert_time_1":         payload.alert_time_1         if payload.alert_time_1  is not None else "09:00",
-        "alert_time_2":         payload.alert_time_2         if payload.alert_time_2  is not None else "18:00",
-        "alert_low_stock_days":   payload.alert_low_stock_days   if payload.alert_low_stock_days   is not None else "30",
-        "meta_balance_threshold": payload.meta_balance_threshold if payload.meta_balance_threshold is not None else "5000",
+        k: v for k, v in payload.model_dump().items()
+        if v is not None and not (k in _CREDENTIAL_KEYS and v == "")
     }
     with get_db() as db:
         for k, v in updates.items():
