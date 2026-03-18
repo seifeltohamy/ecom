@@ -7,15 +7,62 @@ import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
 import Badge from '../components/Badge.jsx';
 
+// Color palette — no more plain green/red
+const C = {
+  in:      '#38bdf8',   // sky blue
+  out:     '#fb923c',   // warm orange
+  net:     '#a78bfa',   // violet
+  netNeg:  '#f43f5e',   // rose
+  meta:    '#1877f2',   // facebook blue
+  balance: '#34d399',   // emerald
+};
+
+function KpiCard({ label, value, color, sub }) {
+  return (
+    <div style={{
+      flex: '1', minWidth: 180,
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
+      overflow: 'hidden',
+      animation: 'fadeIn .3s ease',
+    }}>
+      {/* accent bar */}
+      <div style={{ height: 3, background: color, opacity: .9 }} />
+      <div style={{ padding: '1rem 1.25rem' }}>
+        <div style={{ fontSize: '.68rem', textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', fontWeight: 600, marginBottom: '.4rem' }}>
+          {label}
+        </div>
+        <div style={{ fontSize: '1.45rem', fontWeight: 700, color, lineHeight: 1.15 }}>
+          <span style={{ fontSize: '.7em', fontWeight: 500, opacity: .75, marginRight: '.2rem' }}>EGP</span>
+          {fmt(value)}
+        </div>
+        {sub && <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: '.35rem' }}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div style={{
+      fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase',
+      letterSpacing: '.1em', color: 'var(--muted)',
+      marginBottom: '.5rem', marginTop: '.25rem',
+    }}>
+      {children}
+    </div>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [summary,       setSummary]       = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [months,        setMonths]        = useState([]);
   const [selectedMonth, setSelectedMonth] = useState('');
-  const [metaData,      setMetaData]      = useState(null); // null = loading, false = not connected
+  const [metaData,      setMetaData]      = useState(null);
 
-  // Fetch Meta spend for current month
   useEffect(() => {
     const today     = new Date();
     const date_from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
@@ -50,17 +97,24 @@ export default function Home() {
       .catch(() => setLoading(false));
   }, [selectedMonth]);
 
-  const cs = { flex: '1', minWidth: 180, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1.1rem 1.25rem', animation: 'fadeIn .3s ease' };
-  const ls = { fontSize: '.68rem', textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)', fontWeight: 600 };
+  const netColor = summary?.this_month_net >= 0 ? C.net : C.netNeg;
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-        <div style={{ color: 'var(--muted)', fontSize: '.85rem' }}>Period:</div>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '.75rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Dashboard</h1>
+          <p style={{ color: 'var(--muted)', fontSize: '.85rem', margin: '.2rem 0 0' }}>Overview of your financial activity.</p>
+        </div>
         <select
           value={selectedMonth}
           onChange={e => setSelectedMonth(e.target.value)}
-          style={{ padding: '.45rem .7rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface2)', color: 'var(--text)', fontSize: '.875rem' }}
+          style={{
+            padding: '.45rem .75rem', borderRadius: 'var(--radius-sm)',
+            border: '1px solid var(--border2)', background: 'var(--surface2)',
+            color: 'var(--text)', fontSize: '.875rem', cursor: 'pointer',
+          }}
         >
           {months.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
@@ -70,62 +124,73 @@ export default function Home() {
       {!loading && !summary && <Alert type="error">Failed to load summary.</Alert>}
       {!loading && summary && (
         <>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-            <div style={cs}>
-              <div style={ls}>{selectedMonth} — In</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--success)' }}>EGP {fmt(summary.this_month_in)}</div>
-            </div>
-            <div style={cs}>
-              <div style={ls}>{selectedMonth} — Out</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(summary.this_month_out)}</div>
-            </div>
-            <div style={cs}>
-              <div style={ls}>{selectedMonth} — Net</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: summary.this_month_net >= 0 ? 'var(--success)' : 'var(--danger)' }}>EGP {fmt(summary.this_month_net)}</div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-            <div style={cs}>
-              <div style={ls}>YTD — Total In</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--success)' }}>EGP {fmt(summary.total_in_ytd)}</div>
-            </div>
-            <div style={cs}>
-              <div style={ls}>YTD — Total Out</div>
-              <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(summary.total_out_ytd)}</div>
-            </div>
+          {/* Monthly */}
+          <SectionLabel>{selectedMonth}</SectionLabel>
+          <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+            <KpiCard label="Money In"  value={summary.this_month_in}  color={C.in} />
+            <KpiCard label="Money Out" value={summary.this_month_out} color={C.out} />
+            <KpiCard
+              label="Net"
+              value={summary.this_month_net}
+              color={netColor}
+              sub={summary.this_month_net >= 0 ? 'Profitable month' : 'Month in deficit'}
+            />
           </div>
 
+          {/* YTD */}
+          <SectionLabel>Year to Date</SectionLabel>
+          <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+            <KpiCard label="Total In"  value={summary.total_in_ytd}  color={C.in} />
+            <KpiCard label="Total Out" value={summary.total_out_ytd} color={C.out} />
+          </div>
+
+          {/* Meta Ads */}
           {metaData && (
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-              <div style={cs}>
-                <div style={ls}>Meta Ads — Spend This Month</div>
-                <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(metaData.spend)}</div>
+            <>
+              <SectionLabel>Meta Ads — {selectedMonth}</SectionLabel>
+              <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                <KpiCard label="Ad Spend This Month" value={metaData.spend}   color={C.meta}    sub="Facebook & Instagram" />
+                <KpiCard label="Balance Remaining"   value={metaData.balance} color={C.balance} sub="Available ad budget" />
               </div>
-              <div style={cs}>
-                <div style={ls}>Meta Ads — Balance Remaining</div>
-                <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--success)' }}>EGP {fmt(metaData.balance)}</div>
-              </div>
-            </div>
+            </>
           )}
 
+          {/* Last report */}
           {summary.last_report && (
-            <Card>
-              <CardTitle>Last Bosta Report</CardTitle>
-              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontSize: '.9rem' }}>
-                <div><span style={{ color: 'var(--muted)' }}>Uploaded </span><strong>{new Date(summary.last_report.uploaded_at).toLocaleString('en-GB')}</strong></div>
-                <div><span style={{ color: 'var(--muted)' }}>Orders </span><strong>{fmtN(summary.last_report.order_count)}</strong></div>
-                <div><span style={{ color: 'var(--muted)' }}>Revenue </span><strong style={{ color: 'var(--accent)' }}>EGP {fmt(summary.last_report.grand_revenue)}</strong></div>
+            <Card style={{ marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.75rem' }}>
+                <div style={{ width: 3, height: 18, borderRadius: 2, background: 'var(--accent)', flexShrink: 0 }} />
+                <CardTitle style={{ margin: 0 }}>Last Bosta Report</CardTitle>
+              </div>
+              <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontSize: '.875rem' }}>
+                <div>
+                  <span style={{ color: 'var(--muted)', fontSize: '.75rem', display: 'block', marginBottom: '.1rem' }}>Uploaded</span>
+                  <strong>{new Date(summary.last_report.uploaded_at).toLocaleString('en-GB')}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--muted)', fontSize: '.75rem', display: 'block', marginBottom: '.1rem' }}>Orders</span>
+                  <strong>{fmtN(summary.last_report.order_count)}</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--muted)', fontSize: '.75rem', display: 'block', marginBottom: '.1rem' }}>Revenue</span>
+                  <strong style={{ color: 'var(--accent)', fontSize: '1rem' }}>EGP {fmt(summary.last_report.grand_revenue)}</strong>
+                </div>
               </div>
               {summary.top_sku && (
-                <div style={{ marginTop: '.75rem', fontSize: '.85rem', color: 'var(--muted)' }}>
+                <div style={{
+                  marginTop: '.85rem', fontSize: '.82rem', color: 'var(--muted)',
+                  paddingTop: '.75rem', borderTop: '1px solid var(--border)',
+                }}>
                   Top SKU: <Badge>{summary.top_sku.sku}</Badge>{' '}
-                  <span style={{ color: 'var(--text)' }}>{summary.top_sku.name}</span> — {fmtN(summary.top_sku.total_quantity)} units
+                  <span style={{ color: 'var(--text)' }}>{summary.top_sku.name}</span>
+                  <span style={{ marginLeft: '.4rem' }}>— {fmtN(summary.top_sku.total_quantity)} units</span>
                 </div>
               )}
             </Card>
           )}
 
-          <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap', marginTop: '.5rem' }}>
+          {/* Navigation */}
+          <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
             <Btn variant="outline" onClick={() => navigate('/cashflow')}>→ Cashflow</Btn>
             <Btn variant="outline" onClick={() => navigate('/bosta')}>→ Bosta Orders</Btn>
             <Btn variant="outline" onClick={() => navigate('/analytics')}>→ Analytics</Btn>
