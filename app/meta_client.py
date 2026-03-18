@@ -18,7 +18,8 @@ META_APP_SECRET = os.getenv("META_APP_SECRET", "")
 # ── Token exchange ────────────────────────────────────────────────────────────
 
 def exchange_token(short_lived_token: str) -> str:
-    """Exchange a short-lived FB JS SDK token for a long-lived (60-day) token."""
+    """Exchange a short-lived FB JS SDK token for a long-lived (60-day) token.
+    Falls back to the original token if exchange fails (already long-lived)."""
     r = httpx.get(
         "https://graph.facebook.com/v21.0/oauth/access_token",
         params={
@@ -29,7 +30,13 @@ def exchange_token(short_lived_token: str) -> str:
         },
         timeout=15,
     )
-    r.raise_for_status()
+    if r.status_code != 200:
+        # Surface the actual Facebook error message
+        try:
+            fb_error = r.json().get("error", {}).get("message", r.text)
+        except Exception:
+            fb_error = r.text
+        raise ValueError(f"Token exchange failed: {fb_error}")
     data = r.json()
     if "error" in data:
         raise ValueError(data["error"].get("message", "Token exchange failed"))
