@@ -192,6 +192,15 @@ def trigger_stock_alert(_admin: models.User = Depends(require_admin)):
     return {"ok": True, "message": "Stock alert job started — check server logs."}
 
 
+@router.post("/settings/trigger-meta-balance-alert")
+def trigger_meta_balance_alert(_admin: models.User = Depends(require_admin)):
+    """Manually fire the Meta Ads balance alert job right now (admin only)."""
+    from app.meta_balance_alert import run_meta_balance_alert_job
+    import threading
+    threading.Thread(target=lambda: run_meta_balance_alert_job(force=True), daemon=True).start()
+    return {"ok": True, "message": "Meta balance alert job started — check server logs."}
+
+
 @router.put("/stock-value/purchase-price")
 def upsert_purchase_price(
     body:     StockPurchasePriceIn,

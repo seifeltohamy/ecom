@@ -16,13 +16,15 @@ from apscheduler.triggers.cron import CronTrigger
 from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms, meta
 from app.stock_alert import run_stock_alert_job
 from app.bosta_payout import run_bosta_payout_check
+from app.meta_balance_alert import run_meta_balance_alert_job
 
 app = FastAPI(title="EcomHQ")
 
 # ── Stock alert scheduler (09:00 + 18:00 UTC daily) ───────────────────────────
 _scheduler = BackgroundScheduler(timezone="UTC")
-_scheduler.add_job(run_stock_alert_job,     CronTrigger(minute=0))         # hourly; brands filter by configured times
-_scheduler.add_job(run_bosta_payout_check, CronTrigger(hour="*/4", minute=0))  # every 4 hours
+_scheduler.add_job(run_stock_alert_job,        CronTrigger(minute=0))              # hourly; brands filter by configured times
+_scheduler.add_job(run_bosta_payout_check,    CronTrigger(hour="*/4", minute=0))   # every 4 hours
+_scheduler.add_job(run_meta_balance_alert_job, CronTrigger(minute="*/10"))          # every 10 mins; sends if balance ≤ threshold
 _scheduler.start()
 
 app.include_router(auth.router)
