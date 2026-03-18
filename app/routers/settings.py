@@ -47,11 +47,19 @@ _CREDENTIAL_KEYS = {"bosta_api_key", "bosta_email", "bosta_password", "bosta_ema
 
 @router.put("/settings")
 def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
-    # Skip None values; also skip empty-string credentials (never overwrite a saved key with "")
-    updates = {
-        k: v for k, v in payload.model_dump().items()
-        if v is not None and not (k in _CREDENTIAL_KEYS and v == "")
+    # Build update dict — skip None; skip empty-string credentials (never overwrite a saved key with "")
+    raw = {
+        "bosta_api_key":          payload.bosta_api_key,
+        "bosta_email":            payload.bosta_email,
+        "bosta_password":         payload.bosta_password,
+        "bosta_email_password":   payload.bosta_email_password,
+        "alert_enabled":          payload.alert_enabled,
+        "alert_time_1":           payload.alert_time_1,
+        "alert_time_2":           payload.alert_time_2,
+        "alert_low_stock_days":   payload.alert_low_stock_days,
+        "meta_balance_threshold": payload.meta_balance_threshold,
     }
+    updates = {k: v for k, v in raw.items() if v is not None and not (k in _CREDENTIAL_KEYS and v == "")}
     with get_db() as db:
         for k, v in updates.items():
             row = db.query(models.AppSettings).filter(
