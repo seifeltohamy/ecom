@@ -183,6 +183,15 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
     }
 
 
+@router.post("/settings/trigger-stock-alert")
+def trigger_stock_alert(_admin: models.User = Depends(require_admin)):
+    """Manually fire the stock alert job right now (admin only)."""
+    from app.stock_alert import run_stock_alert_job
+    import threading
+    threading.Thread(target=run_stock_alert_job, daemon=True).start()
+    return {"ok": True, "message": "Stock alert job started — check server logs."}
+
+
 @router.put("/stock-value/purchase-price")
 def upsert_purchase_price(
     body:     StockPurchasePriceIn,
