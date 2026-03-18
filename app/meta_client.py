@@ -91,17 +91,38 @@ def get_spend_summary(access_token: str, ad_account_id: str,
     }
 
 
+def _usd_to_egp_rate() -> float:
+    """Fetch live USD→EGP rate from frankfurter.app (free, no key required)."""
+    try:
+        r = httpx.get(
+            "https://api.frankfurter.app/latest",
+            params={"from": "USD", "to": "EGP"},
+            timeout=8,
+        )
+        return float(r.json()["rates"]["EGP"])
+    except Exception:
+        return 68.0   # fallback if API is unreachable
+
+
 def get_account_balance(access_token: str, ad_account_id: str) -> dict:
-    """Return {balance, currency} — balance is in major currency units (EGP)."""
+    """Return {balance, currency} in EGP.
+
+    Meta stores balances internally in USD × the account's FX rate, so for
+    EGP accounts: balance_egp = raw_api_value ÷ live_usd_egp_rate
+    (confirmed by comparing Graph API vs Ads Manager UI).
+    """
     FacebookAdsApi.init(META_APP_ID, META_APP_SECRET, access_token)
     account = AdAccount(ad_account_id)
     account.api_get(fields=["balance", "currency"])
-    # Meta returns balance in cents
+    currency = account.get("currency", "EGP")
     raw = float(account.get("balance", 0) or 0)
-    return {
-        "balance":  round(raw / 100, 2),
-        "currency": account.get("currency", "EGP"),
-    }
+    if currency == "EGP":
+        rate    = _usd_to_egp_rate()
+        balance = round(raw / rate, 2)
+    else:
+        # For non-EGP accounts the balance is in currency cents
+        balance = round(raw / 100, 2)
+    return {"balance": balance, "currency": currency}
 
 
 def get_campaigns(access_token: str, ad_account_id: str,
