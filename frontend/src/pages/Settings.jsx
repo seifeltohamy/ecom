@@ -131,27 +131,25 @@ export default function Settings() {
     if (!window.FB) { setMetaMsg({ type: 'error', text: 'Facebook SDK not loaded yet. Try again in a moment.' }); return; }
     setConnectingMeta(true);
     setMetaMsg(null);
-    window.FB.login(async (response) => {
+    window.FB.login((response) => {
       if (response.status !== 'connected') {
         setConnectingMeta(false);
         return;
       }
-      try {
-        const res  = await authFetch('/meta/auth', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ access_token: response.authResponse.accessToken }),
-        });
-        const data = await res.json();
-        if (!res.ok) { setMetaMsg({ type: 'error', text: data.detail || 'Connection failed.' }); return; }
-        setMetaConnected(true);
-        setMetaConnectedName(data.connected_name || '');
-        setAdAccounts(data.ad_accounts || []);
-        if (data.ad_accounts?.length === 1) setSelectedAccount(data.ad_accounts[0].id);
-      } catch (e) {
-        setMetaMsg({ type: 'error', text: `Error: ${e.message}` });
-      } finally {
-        setConnectingMeta(false);
-      }
+      authFetch('/meta/auth', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: response.authResponse.accessToken }),
+      })
+        .then(res => res.json().then(data => ({ ok: res.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) { setMetaMsg({ type: 'error', text: data.detail || 'Connection failed.' }); return; }
+          setMetaConnected(true);
+          setMetaConnectedName(data.connected_name || '');
+          setAdAccounts(data.ad_accounts || []);
+          if (data.ad_accounts?.length === 1) setSelectedAccount(data.ad_accounts[0].id);
+        })
+        .catch(e => setMetaMsg({ type: 'error', text: `Error: ${e.message}` }))
+        .finally(() => setConnectingMeta(false));
     }, { scope: 'ads_read,ads_management' });
   }
 
