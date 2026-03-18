@@ -1,7 +1,13 @@
 from pathlib import Path
+import logging
 
 from dotenv import load_dotenv
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
 
 from fastapi import FastAPI
 from apscheduler.schedulers.background import BackgroundScheduler
