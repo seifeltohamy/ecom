@@ -75,16 +75,20 @@ def get_ad_accounts(access_token: str) -> list:
 def get_spend_summary(access_token: str, ad_account_id: str,
                       date_from: str, date_to: str) -> dict:
     """Return {spend, currency} for the given date range at account level."""
-    FacebookAdsApi.init(META_APP_ID, META_APP_SECRET, access_token)
-    account  = AdAccount(ad_account_id)
-    insights = account.get_insights(
-        fields=["spend", "account_currency"],
+    import json
+    r = httpx.get(
+        f"https://graph.facebook.com/v21.0/{ad_account_id}/insights",
         params={
-            "time_range": {"since": date_from, "until": date_to},
+            "fields":     "spend,account_currency",
+            "time_range": json.dumps({"since": date_from, "until": date_to}),
             "level":      "account",
+            "access_token": access_token,
         },
+        timeout=15,
     )
-    row = list(insights)[0] if insights else {}
+    r.raise_for_status()
+    rows = r.json().get("data", [])
+    row  = rows[0] if rows else {}
     return {
         "spend":    round(float(row.get("spend", 0) or 0), 2),
         "currency": row.get("account_currency", "EGP"),
@@ -128,21 +132,19 @@ def get_account_balance(access_token: str, ad_account_id: str) -> dict:
 def get_campaigns(access_token: str, ad_account_id: str,
                   date_from: str, date_to: str) -> list:
     """Return per-campaign rows: {campaign_name, results, cpr, spend, roas}."""
-    FacebookAdsApi.init(META_APP_ID, META_APP_SECRET, access_token)
-    account  = AdAccount(ad_account_id)
-    insights = account.get_insights(
-        fields=[
-            "campaign_name",
-            "spend",
-            "actions",
-            "cost_per_action_type",
-            "purchase_roas",
-        ],
+    import json
+    r = httpx.get(
+        f"https://graph.facebook.com/v21.0/{ad_account_id}/insights",
         params={
-            "time_range": {"since": date_from, "until": date_to},
+            "fields":     "campaign_name,spend,actions,cost_per_action_type,purchase_roas",
+            "time_range": json.dumps({"since": date_from, "until": date_to}),
             "level":      "campaign",
+            "access_token": access_token,
         },
+        timeout=15,
     )
+    r.raise_for_status()
+    insights = r.json().get("data", [])
     rows = []
     for row in insights:
         actions = {
