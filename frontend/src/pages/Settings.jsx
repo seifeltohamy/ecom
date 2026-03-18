@@ -442,51 +442,89 @@ export default function Settings() {
 
       {/* ── Meta Ads Integration ── */}
       <Card>
-        <CardTitle>Meta Ads Integration</CardTitle>
-        <p style={{ color: 'var(--muted)', fontSize: '.9rem', marginBottom: '1.5rem', marginTop: '.5rem' }}>
-          Connect your Facebook account to pull ad spend data into the dashboard, Bosta reports, and BI assistant.
-        </p>
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '1rem' }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: 'linear-gradient(135deg,#1877f2,#0a5dc2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+              <path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+            </svg>
+          </div>
+          <div>
+            <CardTitle style={{ marginBottom: 0 }}>Meta Ads</CardTitle>
+            <p style={{ color: 'var(--muted)', fontSize: '.8rem', margin: 0 }}>
+              Facebook Ads spend &amp; campaign data
+            </p>
+          </div>
+        </div>
 
         {metaMsg && <Alert type={metaMsg.type} onClose={() => setMetaMsg(null)} style={{ marginBottom: '1rem' }}>{metaMsg.text}</Alert>}
 
         {!metaConnected ? (
-          <div>
-            <Btn
+          <div style={{
+            border: '1px dashed var(--border)', borderRadius: 'var(--radius)',
+            padding: '1.5rem', textAlign: 'center',
+          }}>
+            <p style={{ color: 'var(--muted)', fontSize: '.875rem', marginBottom: '1.25rem', marginTop: 0 }}>
+              Connect your Facebook account to pull ad spend into the dashboard,<br/>Bosta reports, and BI assistant.
+            </p>
+            <button
               onClick={connectFacebook}
               disabled={connectingMeta || !fbReady}
-              style={{ background: '#1877f2', color: '#fff', border: 'none' }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '.5rem',
+                background: connectingMeta || !fbReady ? 'var(--surface)' : '#1877f2',
+                color: connectingMeta || !fbReady ? 'var(--muted)' : '#fff',
+                border: connectingMeta || !fbReady ? '1px solid var(--border)' : 'none',
+                borderRadius: 'var(--radius-sm)', padding: '.6rem 1.25rem',
+                fontSize: '.9rem', fontWeight: 600, cursor: connectingMeta || !fbReady ? 'not-allowed' : 'pointer',
+                transition: 'opacity .15s',
+              }}
             >
-              {connectingMeta ? 'Connecting…' : !fbReady ? 'Loading…' : '🔵 Continue with Facebook'}
-            </Btn>
-            {!fbReady && (
-              <p style={{ fontSize: '.8rem', color: 'var(--muted)', marginTop: '.5rem' }}>
-                Loading Facebook SDK…
-              </p>
-            )}
+              {connectingMeta ? (
+                <><span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />Connecting…</>
+              ) : !fbReady ? 'Loading SDK…' : (
+                <><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>Continue with Facebook</>
+              )}
+            </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
-              <span style={{
-                fontSize: '.85rem', fontWeight: 600, color: '#1877f2',
-                background: 'rgba(24,119,242,.1)', border: '1px solid rgba(24,119,242,.25)',
-                borderRadius: '20px', padding: '.25rem .75rem',
-              }}>
-                ✓ Connected as {metaConnectedName}
-              </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {/* Connected badge row */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: '.75rem', flexWrap: 'wrap',
+              background: 'rgba(24,119,242,.08)', border: '1px solid rgba(24,119,242,.2)',
+              borderRadius: 'var(--radius)', padding: '.75rem 1rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%', background: '#22c55e',
+                  boxShadow: '0 0 0 3px rgba(34,197,94,.2)',
+                }} />
+                <span style={{ fontSize: '.875rem', fontWeight: 600, color: 'var(--text)' }}>
+                  {metaConnectedName}
+                </span>
+                <span style={{ fontSize: '.78rem', color: 'var(--muted)' }}>connected</span>
+              </div>
               <button
                 onClick={disconnectMeta}
                 disabled={disconnectingMeta}
                 style={{
                   background: 'transparent', border: '1px solid var(--danger)',
                   color: 'var(--danger)', borderRadius: 'var(--radius-sm)',
-                  padding: '.3rem .65rem', cursor: 'pointer', fontSize: '.8rem',
+                  padding: '.25rem .65rem', cursor: 'pointer', fontSize: '.8rem', fontWeight: 500,
                 }}
               >
                 {disconnectingMeta ? 'Disconnecting…' : 'Disconnect'}
               </button>
             </div>
 
+            {/* Ad account picker */}
             <div>
               <label style={labelStyle}>Ad Account</label>
               {adAccounts.length > 0 ? (
@@ -516,11 +554,6 @@ export default function Settings() {
                     {connectingMeta ? 'Loading…' : 'Re-fetch accounts'}
                   </Btn>
                 </div>
-              )}
-              {metaAdAccountId && adAccounts.length === 0 && (
-                <p style={{ fontSize: '.8rem', color: 'var(--muted)', marginTop: '.4rem' }}>
-                  Current: <code style={{ fontFamily: 'monospace' }}>{metaAdAccountId}</code>
-                </p>
               )}
             </div>
           </div>
