@@ -24,6 +24,7 @@ class TaskBody(BaseModel):
     notes: Optional[str] = None
     activity_id: Optional[int] = None
     done: Optional[bool] = None
+    column_id: Optional[int] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ def _board(db, brand_id: int):
                 "tasks": [
                     {
                         "id": t.id,
+                        "column_id": t.column_id,
                         "title": t.title,
                         "deadline": t.deadline,
                         "notes": t.notes,
@@ -225,6 +227,14 @@ def update_task(task_id: int, body: TaskBody, brand_id: int = Depends(get_brand_
         task.activity_id = body.activity_id
         if body.done is not None:
             task.done = body.done
+        if body.column_id is not None:
+            target_col = db.query(models.TodoColumn).filter(
+                models.TodoColumn.id == body.column_id,
+                models.TodoColumn.brand_id == brand_id,
+            ).first()
+            if not target_col:
+                raise HTTPException(status_code=404, detail="Target column not found.")
+            task.column_id = body.column_id
         db.commit()
         return _board(db, brand_id)
 
