@@ -48,6 +48,10 @@
 - [x] Stock alert configurable — per-brand times + threshold; hourly APScheduler job
 - [x] Bank SMS → Cashflow suggestions — iOS Shortcut; 3 CIB formats; migration 0017; accept/dismiss UI
 - [x] Bosta payout email → Cashflow suggestions — Gmail IMAP; migration 0018; type/category; manual trigger
+- [x] Meta Ads integration — FB popup OAuth; ad account picker; Settings/Home/Analytics/BI/Bosta auto-fill
+- [x] Stock daily inventory email — morning always sends full inventory; evening sends low-stock only
+- [x] Bosta daily IMAP fix — select [Gmail]/All Mail instead of inbox
+- [x] To Do Kanban board — columns = people, tasks with deadline/notes/activity tag, filter by activity, manage activities panel (migration 0019)
 
 ## In Progress
 

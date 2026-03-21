@@ -22,6 +22,7 @@ export default defineConfig({
       '/sku-cost-items':{ target: 'http://localhost:8080', changeOrigin: true },
       '/automation':    { target: 'http://localhost:8080', changeOrigin: true },
       '/bi':            { target: 'http://localhost:8080', changeOrigin: true, bypass: (req) => req.headers.accept?.includes('text/html') ? '/index.html' : null },
+      '/todo':          { target: 'http://localhost:8080', changeOrigin: true, bypass: (req) => req.headers.accept?.includes('text/html') ? '/index.html' : null },
     }
   }
 })

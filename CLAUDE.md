@@ -115,6 +115,7 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-17): Bank SMS suggestions fully working (route fix, debit card format, dismiss confirm). Bosta payout email feature — Gmail IMAP every 4h + manual button, Money In suggestions with "Bosta" pre-assigned, migration 0018. All migrations through 0018 applied locally; deploy via Railway.
-Env var `GEMINI_API_KEY` must be set in Railway dashboard for BI to work.
-Pending: Bosta payout subject decode re-test, iOS Shortcut empty body (keep "Ask Before Running" ON), password change, cashflow CSV export.
+Last session (2026-03-18): Meta Ads integration complete — FB popup OAuth, ad account picker, Home spend/balance chips, Analytics campaigns table, Bosta auto-fill ads_spent, BI snapshot. Stock daily email fix (morning = full inventory). Bosta IMAP fix (`[Gmail]/All Mail`). All code pushed (b2927a2).
+Env vars required in Railway: `GEMINI_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `VITE_META_APP_ID` (build var).
+Facebook App must whitelist `ecom-production-a643.up.railway.app` in App Domains + OAuth redirect URIs.
+Pending: password change, cashflow CSV export, iOS Shortcut empty body fix.

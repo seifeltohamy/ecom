@@ -3,6 +3,95 @@
 
 ---
 
+## Session — 2026-03-21 (To Do Kanban board)
+
+### What Was Done
+
+**To Do page — new Kanban board (`/todo`):**
+- Migration 0019: `todo_activities` + `todo_columns` + `todo_tasks` (brand-scoped; activity_id FK uses SET NULL on delete)
+- `app/routers/todo.py`: 10 endpoints — full board GET, activities CRUD, columns CRUD, tasks CRUD; all return full board on mutation
+- `main.py`: registered `todo.router` before cashflow router
+- `frontend/vite.config.js`: added `/todo` proxy with HTML bypass
+- `frontend/src/App.jsx`: pageMeta + PERMISSIONED_PAGES + Route + NavLink (between BI Assistant and Users)
+- `frontend/src/pages/Todo.jsx`: Kanban board with:
+  - Activity filter pills (All + per-activity, cycling color palette)
+  - Collapsible activity management panel (add/rename/delete)
+  - Column cards (~260px) per person with inline rename, delete confirm
+  - Task cards showing activity badge, title, deadline urgency badge, notes preview
+  - Task modal (title, activity select, deadline date, notes textarea) for add/edit/delete
+  - "+ Add Person" card at end of board
+
+**Pending:** none
+
+---
+
+## Session — 2026-03-18 (Meta Ads fixes + Dashboard redesign)
+
+### What Was Done
+
+**Meta Ads — bug fixes:**
+- `FB.login()` callback was `async` → FB SDK error "Expression is of type asyncfunction". Fixed by converting to `.then()/.catch()/.finally()` promise chain
+- Token exchange error now surfaces actual Facebook error message (was throwing generic httpx 400)
+- `get_spend_summary` + `get_campaigns` switched from `facebook_business` SDK to direct `httpx` Graph API calls — SDK was returning ~8K EGP over actual spend
+- `get_account_balance` fixed for EGP accounts: Meta stores balance in a USD-based unit; correct formula is `raw / usd_egp_rate` (not `raw / 100`); fetches live rate from `frankfurter.app` (free, no key); non-EGP accounts still use `/100`
+
+**Settings.jsx — Meta Ads card redesign:**
+- Facebook logo icon in blue gradient square header
+- Not-connected: dashed empty-state box, centered button with FB icon + spinner
+- Connected: green pulse dot, blue-tinted badge row, cleaner layout
+
+**Home.jsx — Dashboard redesign:**
+- `KpiCard` component with 3px top accent bar per color
+- All 5 financial cards (Money In, Money Out, Net, Total In, Total Out) use orange `var(--accent)`
+- Meta Ads uses Facebook blue (spend) + emerald (balance)
+- Section labels (month / YTD / Meta Ads)
+- Period selector moved to header row
+- Last report card: orange left bar, stacked sub-labels, divider for top SKU
+
+**Meta Ads — spend date timezone bug:**
+- `new Date(year, month, 1).toISOString()` in Egypt (UTC+3) shifts midnight local to Feb 28 UTC — included ~8K EGP of February spend
+- Fixed in `Home.jsx` + `Analytics.jsx`: use `getFullYear()`/`getMonth()`/`getDate()` to build date strings directly, no UTC conversion
+- Spend now matches Ads Manager exactly
+
+**Pending:** none
+
+---
+
+## Last Session — 2026-03-18 (Meta Ads integration + Stock alert fix)
+
+### What Was Done
+
+**Stock Alert — daily full inventory email:**
+- `app/stock_alert.py`: morning alert (`alert_time_1`) now always sends full inventory (blue header "📦 Daily Inventory Report") even when all stock is healthy
+- Evening alert (`alert_time_2`) still sends low-stock-only (orange header "⚠️ Low Stock Alert")
+- `_build_html` now accepts `daily_report: bool`; healthy rows get white background
+
+**Bosta daily automation — IMAP mailbox fix:**
+- `automation/bosta_daily.py`: changed `mail.select("inbox")` → `mail.select('"[Gmail]/All Mail"')` — Bosta export emails land in Promotions, not Inbox
+- `upload_to_ecomhq` now returns `(result, brand_token)` tuple
+- New `set_meta_ads_spent(brand_token, report_id, date_from, date_to)` — calls `/meta/summary` + `PUT /reports/{id}/pl` after upload to auto-fill ads_spent
+
+**Meta Ads API integration (full):**
+- `app/meta_client.py` (new): `facebook-business` SDK wrapper — `exchange_token`, `get_user_name`, `get_ad_accounts`, `get_spend_summary`, `get_account_balance`, `get_campaigns`
+- `app/routers/meta.py` (new): 8 endpoints (see API contract)
+- `main.py`: registered `meta.router`
+- `app/routers/settings.py` `GET /settings`: now returns `meta_connected`, `meta_connected_name`, `meta_ad_account_id` (token never exposed)
+- `app/routers/bi.py` `_build_snapshot()`: adds `meta_ads_last_30_days` section when connected
+- `requirements.txt`: added `facebook-business`
+- `frontend/src/pages/Settings.jsx`: new "Meta Ads Integration" card — FB popup OAuth, ad account picker, connected/disconnect UI; no manual token UI
+- `frontend/src/pages/Home.jsx`: Meta spend + balance remaining stat chips (current month, shown when connected)
+- `frontend/src/pages/Analytics.jsx`: "Meta Campaigns" card with date range pickers and table (Campaign / Results / CPR / Amount Spent / Purchase ROAS)
+- `frontend/src/pages/BostaOrders.jsx`: adsSpent `type="number"` → `type="text"`; auto-fills from `/meta/summary` when report loads with no saved ads_spent
+- `frontend/.env`: `VITE_META_APP_ID=1338653400940878` for local dev
+- `Dockerfile`: `ARG VITE_META_APP_ID` + `ENV VITE_META_APP_ID=$VITE_META_APP_ID` in Stage 1 so Railway passes it as build arg
+
+**Pending:**
+- User must add `VITE_META_APP_ID`, `META_APP_ID`, `META_APP_SECRET` to Railway Variables tab
+- User must add `ecom-production-a643.up.railway.app` to Facebook App Domains + OAuth redirect URIs in Meta Developer console
+- Redeploy Railway after adding variables
+
+---
+
 ## Last Session — 2026-03-17 (SMS fixes + Bosta payout email feature)
 
 ### What Was Done
@@ -46,20 +135,6 @@
 - Upgraded to Gemini 2.5 Flash; chat-style accumulating messages; markdown rendering (`react-markdown`); thinking animation; optimistic UI; New Chat button; full-height layout; EGP currency in system prompt; live stock inventory (top 30) in snapshot; `/bi` in `PERMISSIONED_PAGES`; mobile responsive
 
 **Settings page:** brand name badge in orange pill; `.catch()` + `.finally()` on fetch
-
----
-
-## Session — 2026-03-12 (Admin users + Analytics fixes + Read Only users)
-
-**Admin Portal — Admin Users table:** `GET /admin/admins`, `PUT /admin/admins/{id}/brands`, `DELETE /admin/admins/{id}`; inline brand access editing
-
-**Analytics fixes:** proportional distribution (÷ total); 0.5% min floor; right column 150px + nowrap; Stock Value duplicate title removed
-
-**Settings viewer access:** `GET /settings` relaxed to `get_current_user`; `/settings` added to `PERMISSIONED_PAGES`
-
-**Read Only user permission:** migration 0015 `users.read_only`; `require_writable` dep; toggle UI in Users.jsx
-
-**Analytics + Stock Value enhancements:** Net stat card; Money In by Source chart; Bosta P&L Summary card; All-Months Trend table; Sold/Sell-Through%/Days Left columns; GMROI + Slow Mover Capital cards; `GET /dashboard/trend` + `GET /dashboard/bosta-summary` endpoints
 
 ---
 

@@ -396,6 +396,111 @@
 
 ---
 
+## Meta Ads
+
+### GET /meta/config
+- **Auth:** Bearer (any role)
+- **Response:** `{ app_id: string }` — Facebook App ID for JS SDK init
+- **Errors:** 503 if `META_APP_ID` not set on server
+
+### GET /meta/status
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** `{ connected: bool, connected_name: string, ad_account_id: string }`
+
+### POST /meta/auth
+- **Auth:** Bearer + require_admin + brand in JWT
+- **Body:** `{ access_token: string }` — short-lived token from FB JS SDK
+- **Behavior:** Exchanges for long-lived (60-day) token; saves `meta_access_token` + `meta_connected_name` to AppSettings; returns ad accounts list
+- **Response:** `{ ok: true, connected_name: string, ad_accounts: [{ id, name, currency, status }] }`
+- **Errors:** 400 Meta API error; 503 if `META_APP_ID`/`META_APP_SECRET` not set
+
+### POST /meta/auth/manual
+- **Auth:** Bearer + require_admin + brand in JWT
+- **Body:** `{ access_token: string }` — pre-existing long-lived token
+- **Behavior:** Validates token via `get_user_name`; saves directly (no exchange)
+- **Response:** `{ ok: true, connected_name: string, ad_accounts: [...] }`
+
+### POST /meta/select-account
+- **Auth:** Bearer + require_admin + brand in JWT
+- **Body:** `{ ad_account_id: string }` — e.g. `"act_1234567890"`
+- **Behavior:** Saves `meta_ad_account_id` to AppSettings
+- **Response:** `{ ok: true }`
+
+### DELETE /meta/disconnect
+- **Auth:** Bearer + require_admin + brand in JWT
+- **Behavior:** Deletes `meta_access_token`, `meta_ad_account_id`, `meta_connected_name` from AppSettings
+- **Response:** `{ ok: true }`
+
+### GET /meta/summary
+- **Auth:** Bearer (any role) + brand in JWT
+- **Query params:** `date_from`, `date_to` (ISO strings, optional — default current month)
+- **Response (connected):** `{ connected: true, spend: float, balance: float, currency: string, date_from, date_to }`
+- **Response (not connected):** `{ connected: false, spend: 0, balance: 0, currency: "EGP" }`
+- **Errors:** 502 on Meta API error
+
+### GET /meta/campaigns
+- **Auth:** Bearer (any role) + brand in JWT
+- **Query params:** `date_from`, `date_to` (ISO strings, optional — default current month)
+- **Response (connected):** `{ connected: true, rows: [{ campaign_name, results, cpr, spend, roas }], date_from, date_to }`
+- **Response (not connected):** `{ connected: false, rows: [] }`
+- **Errors:** 502 on Meta API error
+
+---
+
+## To Do Board *(brand-scoped)*
+
+### GET /todo
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** `{ activities: [{id, name}], columns: [{id, name, tasks: [{id, title, deadline, notes, activity_id, activity_name, sort_order}]}] }`
+
+### POST /todo/activities
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ name: string }`
+- **Response:** Full board (same as GET /todo)
+- **Errors:** 400 if name empty or already exists
+
+### PUT /todo/activities/{act_id}
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ name: string }`
+- **Response:** Full board
+
+### DELETE /todo/activities/{act_id}
+- **Auth:** Bearer (any role) + brand in JWT
+- **Behavior:** Deletes activity; tasks with this activity_id have it set to NULL (SET NULL FK)
+- **Response:** Full board
+
+### POST /todo/columns
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ name: string }`
+- **Response:** Full board
+- **Errors:** 400 if name empty or already exists
+
+### PUT /todo/columns/{col_id}
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ name: string }`
+- **Response:** Full board
+
+### DELETE /todo/columns/{col_id}
+- **Auth:** Bearer (any role) + brand in JWT
+- **Behavior:** Cascade deletes all tasks in this column
+- **Response:** Full board
+
+### POST /todo/columns/{col_id}/tasks
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ title: string, deadline: string|null, notes: string|null, activity_id: int|null }`
+- **Response:** Full board
+
+### PUT /todo/tasks/{task_id}
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ title, deadline, notes, activity_id }` (all nullable except title)
+- **Response:** Full board
+
+### DELETE /todo/tasks/{task_id}
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** Full board
+
+---
+
 ## Debug
 
 ### POST /debug-upload

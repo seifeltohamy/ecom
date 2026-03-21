@@ -188,3 +188,41 @@ class SmsSuggestion(Base):
     created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (UniqueConstraint("brand_id", "ref_number", name="uq_sms_brand_ref"),)
+
+
+class TodoActivity(Base):
+    __tablename__ = "todo_activities"
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id   = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False, index=True)
+    name       = Column(String(128), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    __table_args__ = (UniqueConstraint("brand_id", "name", name="uq_todo_act_brand_name"),)
+
+
+class TodoColumn(Base):
+    __tablename__ = "todo_columns"
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id   = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False, index=True)
+    name       = Column(String(128), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    tasks = relationship("TodoTask", back_populates="column", cascade="all, delete-orphan", order_by="TodoTask.sort_order")
+
+    __table_args__ = (UniqueConstraint("brand_id", "name", name="uq_todo_col_brand_name"),)
+
+
+class TodoTask(Base):
+    __tablename__ = "todo_tasks"
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id    = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    column_id   = Column(Integer, ForeignKey("todo_columns.id", ondelete="CASCADE"), nullable=False, index=True)
+    activity_id = Column(Integer, ForeignKey("todo_activities.id", ondelete="SET NULL"), nullable=True, index=True)
+    title       = Column(String(256), nullable=False)
+    deadline    = Column(String(32), nullable=True)   # "YYYY-MM-DD"
+    notes       = Column(Text, nullable=True)
+    sort_order  = Column(Integer, nullable=False, default=0)
+    created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    column   = relationship("TodoColumn", back_populates="tasks")
+    activity = relationship("TodoActivity")

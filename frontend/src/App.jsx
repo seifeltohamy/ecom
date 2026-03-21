@@ -17,6 +17,7 @@ import Users        from './pages/Users.jsx';
 import Categories   from './pages/Categories.jsx';
 import AdminPortal  from './pages/AdminPortal.jsx';
 import BI           from './pages/BI.jsx';
+import Todo         from './pages/Todo.jsx';
 
 const pageMeta = {
   '/':              { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
@@ -30,6 +31,7 @@ const pageMeta = {
   '/users':         { title: 'User Management', subtitle: 'Create and manage user accounts.' },
   '/admin':         { title: 'Admin Overview',  subtitle: 'Numbers across all brands.' },
   '/bi':            { title: 'BI Assistant',    subtitle: 'Ask questions about your data.' },
+  '/todo':          { title: 'To Do',           subtitle: 'Kanban board — tasks and activities by person.' },
 };
 
 // Pages that can be permission-controlled for viewer users (shown as checkboxes)
@@ -43,6 +45,7 @@ export const PERMISSIONED_PAGES = [
   { path: '/categories',  label: 'Categories'   },
   { path: '/settings',    label: 'Settings'     },
   { path: '/bi',          label: 'BI Assistant' },
+  { path: '/todo',        label: 'To Do'        },
 ];
 
 function SwitchBrandButton({ close }) {
@@ -169,6 +172,7 @@ function Layout() {
           {canSee('/products')    && <NavLink to="/products"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>}
           {canSee('/categories')  && <NavLink to="/categories"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>}
           {canSee('/bi')          && <NavLink to="/bi"            style={({ isActive }) => S.navItem(isActive)} onClick={close}>BI Assistant</NavLink>}
+          {canSee('/todo')        && <NavLink to="/todo"          style={({ isActive }) => S.navItem(isActive)} onClick={close}>To Do</NavLink>}
           {userRole === 'admin' && (
             <NavLink to="/users" style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
           )}
@@ -234,6 +238,7 @@ export default function App() {
               <Route path="stock-value"  element={<StockValue />} />
               <Route path="categories"   element={<Categories />} />
               <Route path="bi"           element={<BI />} />
+              <Route path="todo"         element={<Todo />} />
               <Route path="settings"     element={<Settings />} />
               <Route path="users"        element={<Users />} />
             </Route>

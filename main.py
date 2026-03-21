@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse as _FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms, meta
+from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms, meta, todo
 from app.stock_alert import run_stock_alert_job
 from app.bosta_payout import run_bosta_payout_check
 from app.meta_balance_alert import run_meta_balance_alert_job
@@ -34,6 +34,7 @@ _scheduler.start()
 
 app.include_router(auth.router)
 app.include_router(sms.router)      # must be before cashflow (avoids /cashflow/{month} swallowing /cashflow/sms-suggestions)
+app.include_router(todo.router)
 app.include_router(cashflow.router)
 app.include_router(dashboard.router)
 app.include_router(products.router)
