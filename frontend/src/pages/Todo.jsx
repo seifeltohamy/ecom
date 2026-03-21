@@ -31,11 +31,11 @@ function deadlineBadge(deadline) {
 }
 
 // ── Task Modal ────────────────────────────────────────────────────────────────
-function TaskModal({ task, activities, onClose, onSave, onDelete }) {
+function TaskModal({ task, activities, prefillActivityId, onClose, onSave, onDelete }) {
   const [title, setTitle]           = useState(task?.title || '');
   const [deadline, setDeadline]     = useState(task?.deadline || '');
   const [notes, setNotes]           = useState(task?.notes || '');
-  const [activityId, setActivityId] = useState(task?.activity_id ?? '');
+  const [activityId, setActivityId] = useState(task?.activity_id ?? prefillActivityId ?? '');
   const [saving, setSaving]         = useState(false);
 
   async function handleSave() {
@@ -220,12 +220,13 @@ function TaskCard({ task, isDone, onToggleDone, onEdit, onDragStart, onDragEnd }
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Todo() {
   const [columns, setColumns]           = useState([]);
+  const [unassigned, setUnassigned]     = useState([]);
   const [activities, setActivities]     = useState([]);
   const [viewMode, setViewMode]         = useState('kanban');   // 'kanban' | 'activity'
   const [activeFilter, setActiveFilter] = useState(null);       // kanban filter
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState('');
-  const [editTask, setEditTask]         = useState(null);        // { isNew, columnId, task? }
+  const [editTask, setEditTask]         = useState(null);        // { isNew, columnId, task?, prefillActivityId? }
   const [showActPanel, setShowActPanel] = useState(false);
   const [newColName, setNewColName]     = useState('');
   const [addingCol, setAddingCol]       = useState(false);
@@ -237,6 +238,7 @@ export default function Todo() {
   function loadBoard(data) {
     setColumns(data.columns);
     setActivities(data.activities);
+    setUnassigned(data.unassigned || []);
   }
 
   useEffect(() => {
@@ -259,15 +261,18 @@ export default function Todo() {
     return res.json();
   }
 
-  // Drag-and-drop — move task to a different column
+  // Drag-and-drop — move task to a different column (0 = unassign)
   async function handleDrop(taskId, targetColId) {
-    const task = columns.flatMap(c => c.tasks).find(t => t.id === taskId);
-    if (!task || task.column_id === targetColId) return;
+    const allTasks = [...columns.flatMap(c => c.tasks), ...unassigned];
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const currentColId = task.column_id ?? 0;
+    if (currentColId === targetColId) return;
     try {
       loadBoard(await apiCall(`/todo/tasks/${taskId}`, 'PUT', {
         title: task.title, deadline: task.deadline, notes: task.notes,
         activity_id: task.activity_id, done: task.done,
-        column_id: targetColId,
+        column_id: targetColId,  // 0 = unassign
       }));
     } catch (e) { alert(e.message); }
   }
@@ -336,7 +341,12 @@ export default function Todo() {
   async function handleSaveTask({ title, deadline, notes, activity_id, done }) {
     try {
       if (editTask.isNew) {
-        loadBoard(await apiCall(`/todo/columns/${editTask.columnId}/tasks`, 'POST', { title, deadline, notes, activity_id }));
+        if (editTask.columnId === null) {
+          // Create unassigned task
+          loadBoard(await apiCall('/todo/tasks', 'POST', { title, deadline, notes, activity_id }));
+        } else {
+          loadBoard(await apiCall(`/todo/columns/${editTask.columnId}/tasks`, 'POST', { title, deadline, notes, activity_id }));
+        }
       } else {
         loadBoard(await apiCall(`/todo/tasks/${editTask.task.id}`, 'PUT', { title, deadline, notes, activity_id, done }));
       }
@@ -471,7 +481,8 @@ export default function Todo() {
 
   // ── Activity View ────────────────────────────────────────────────────────────
   function renderActivityView() {
-    const allTasks = columns.flatMap(c => c.tasks);
+    // Combine assigned + unassigned for section filtering
+    const allTasks = [...columns.flatMap(c => c.tasks), ...unassigned];
 
     // Build sections: one per activity + one for untagged tasks
     const sections = [
@@ -493,72 +504,106 @@ export default function Todo() {
       return <p style={{ color: 'var(--muted)', fontSize: '.9rem' }}>No activities yet. Add one via ⚙ Activities, then add tasks and tag them.</p>;
     }
 
+    // Columns for activity grid: "Unassigned" first, then people
+    const gridCols = [{ id: 0, name: 'Unassigned', isUnassigned: true }, ...columns];
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {sections.map(section => (
-          <div key={section.id ?? 'untagged'}>
-            {/* Section header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '.75rem' }}>
-              <span style={{ background: section.color.bg, color: section.color.text, borderRadius: 6, padding: '3px 12px', fontSize: '.82rem', fontWeight: 700 }}>
-                {section.name}
-              </span>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            </div>
+        {sections.map(section => {
+          const sectionUnassigned = unassigned.filter(t =>
+            section.id !== null ? t.activity_id === section.id : !t.activity_id
+          );
 
-            {/* Person columns grid */}
-            {columns.length === 0 ? (
-              <p style={{ color: 'var(--muted)', fontSize: '.85rem' }}>No people added yet.</p>
-            ) : (
+          return (
+            <div key={section.id ?? 'untagged'}>
+              {/* Section header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '.75rem' }}>
+                <span style={{ background: section.color.bg, color: section.color.text, borderRadius: 6, padding: '3px 12px', fontSize: '.82rem', fontWeight: 700 }}>
+                  {section.name}
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
+
+              {/* Grid: Unassigned + person columns */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: `repeat(${columns.length}, minmax(200px, 1fr))`,
+                gridTemplateColumns: `repeat(${gridCols.length}, minmax(200px, 1fr))`,
                 gap: '1px',
                 border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-sm)',
                 overflow: 'hidden',
               }}>
                 {/* Column headers */}
-                {columns.map(col => (
+                {gridCols.map(col => (
                   <div key={col.id} style={{
-                    background: 'var(--surface2)', padding: '.5rem .75rem',
-                    fontWeight: 700, fontSize: '.82rem', color: 'var(--text)',
+                    background: col.isUnassigned ? 'rgba(168,162,158,0.08)' : 'var(--surface2)',
+                    padding: '.5rem .75rem',
+                    fontWeight: 700, fontSize: '.82rem',
+                    color: col.isUnassigned ? 'var(--muted)' : 'var(--text)',
                     borderBottom: '1px solid var(--border)',
                     textAlign: 'center',
+                    fontStyle: col.isUnassigned ? 'italic' : 'normal',
                   }}>
                     {col.name}
                   </div>
                 ))}
 
                 {/* Task cells */}
-                {columns.map(col => {
-                  const cellTasks = section.tasks.filter(t => t.column_id === col.id);
-                  const isOver = dragOverCol === `act-${section.id}-${col.id}`;
+                {gridCols.map(col => {
+                  const cellKey = `act-${section.id}-${col.id}`;
+                  const isOver = dragOverCol === cellKey;
+                  const cellTasks = col.isUnassigned
+                    ? sectionUnassigned
+                    : section.tasks.filter(t => t.column_id === col.id);
+
                   return (
                     <div key={col.id}
-                      onDragOver={e => { e.preventDefault(); setDragOverCol(`act-${section.id}-${col.id}`); }}
+                      onDragOver={e => { e.preventDefault(); setDragOverCol(cellKey); }}
                       onDragLeave={() => setDragOverCol(null)}
                       onDrop={e => {
                         e.preventDefault();
                         setDragOverCol(null);
                         const taskId = parseInt(e.dataTransfer.getData('taskId'));
-                        if (taskId) handleDrop(taskId, col.id);
+                        if (taskId) handleDrop(taskId, col.id);  // col.id=0 → unassign
                       }}
                       style={{
-                        background: isOver ? 'rgba(249,115,22,0.06)' : 'var(--surface)',
+                        background: isOver
+                          ? (col.isUnassigned ? 'rgba(168,162,158,0.1)' : 'rgba(249,115,22,0.06)')
+                          : (col.isUnassigned ? 'rgba(168,162,158,0.04)' : 'var(--surface)'),
                         padding: '.6rem',
                         display: 'flex', flexDirection: 'column', gap: '.5rem',
                         minHeight: 80,
-                        border: isOver ? '1px solid var(--accent)' : '1px solid transparent',
+                        border: isOver
+                          ? `1px solid ${col.isUnassigned ? 'var(--border2)' : 'var(--accent)'}`
+                          : '1px solid transparent',
                         transition: 'background .15s, border-color .15s',
                       }}
                     >
                       {cellTasks.map(task => (
                         <TaskCard key={task.id} task={task} isDone={task.done}
                           onToggleDone={handleToggleDone}
-                          onEdit={t => setEditTask({ isNew: false, columnId: col.id, task: t })}
+                          onEdit={t => setEditTask({ isNew: false, columnId: col.isUnassigned ? null : col.id, task: t })}
                           {...taskDragProps(task)} />
                       ))}
-                      {cellTasks.length === 0 && (
+                      {/* Add task button in Unassigned cell */}
+                      {col.isUnassigned && (
+                        <button
+                          onClick={() => setEditTask({
+                            isNew: true,
+                            columnId: null,
+                            prefillActivityId: section.id ?? undefined,
+                          })}
+                          style={{
+                            ...S.btnBase, ...S.btnOutline,
+                            width: '100%', justifyContent: 'center',
+                            fontSize: '.75rem', borderStyle: 'dashed',
+                            opacity: 0.7,
+                          }}
+                        >
+                          + Add task
+                        </button>
+                      )}
+                      {cellTasks.length === 0 && !col.isUnassigned && (
                         <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ fontSize: '.7rem', color: 'var(--border2)' }}>drop here</span>
                         </div>
@@ -567,9 +612,9 @@ export default function Todo() {
                   );
                 })}
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -632,6 +677,7 @@ export default function Todo() {
         <TaskModal
           task={editTask.task}
           activities={activities}
+          prefillActivityId={editTask.prefillActivityId}
           onClose={() => setEditTask(null)}
           onSave={handleSaveTask}
           onDelete={handleDeleteTask}

@@ -207,7 +207,7 @@ class TodoColumn(Base):
     name       = Column(String(128), nullable=False)
     sort_order = Column(Integer, nullable=False, default=0)
 
-    tasks = relationship("TodoTask", back_populates="column", cascade="all, delete-orphan", order_by="TodoTask.sort_order")
+    tasks = relationship("TodoTask", back_populates="column", cascade="all", order_by="TodoTask.sort_order")
 
     __table_args__ = (UniqueConstraint("brand_id", "name", name="uq_todo_col_brand_name"),)
 
@@ -216,7 +216,7 @@ class TodoTask(Base):
     __tablename__ = "todo_tasks"
     id          = Column(Integer, primary_key=True, autoincrement=True)
     brand_id    = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
-    column_id   = Column(Integer, ForeignKey("todo_columns.id", ondelete="CASCADE"), nullable=False, index=True)
+    column_id   = Column(Integer, ForeignKey("todo_columns.id", ondelete="CASCADE"), nullable=True, index=True)
     activity_id = Column(Integer, ForeignKey("todo_activities.id", ondelete="SET NULL"), nullable=True, index=True)
     title       = Column(String(256), nullable=False)
     deadline    = Column(String(32), nullable=True)   # "YYYY-MM-DD"

@@ -46,29 +46,40 @@ def _board(db, brand_id: int):
     # Build activity name lookup
     act_map = {a.id: a.name for a in activities}
 
+    def _task_dict(t):
+        return {
+            "id": t.id,
+            "column_id": t.column_id,
+            "title": t.title,
+            "deadline": t.deadline,
+            "notes": t.notes,
+            "done": t.done,
+            "activity_id": t.activity_id,
+            "activity_name": act_map.get(t.activity_id) if t.activity_id else None,
+            "sort_order": t.sort_order,
+        }
+
+    unassigned = (
+        db.query(models.TodoTask)
+        .filter(
+            models.TodoTask.brand_id == brand_id,
+            models.TodoTask.column_id == None,
+        )
+        .order_by(models.TodoTask.sort_order, models.TodoTask.id)
+        .all()
+    )
+
     return {
         "activities": [{"id": a.id, "name": a.name} for a in activities],
         "columns": [
             {
                 "id": col.id,
                 "name": col.name,
-                "tasks": [
-                    {
-                        "id": t.id,
-                        "column_id": t.column_id,
-                        "title": t.title,
-                        "deadline": t.deadline,
-                        "notes": t.notes,
-                        "done": t.done,
-                        "activity_id": t.activity_id,
-                        "activity_name": act_map.get(t.activity_id) if t.activity_id else None,
-                        "sort_order": t.sort_order,
-                    }
-                    for t in sorted(col.tasks, key=lambda x: (x.sort_order, x.id))
-                ],
+                "tasks": [_task_dict(t) for t in sorted(col.tasks, key=lambda x: (x.sort_order, x.id))],
             }
             for col in columns
         ],
+        "unassigned": [_task_dict(t) for t in unassigned],
     }
 
 
@@ -184,6 +195,26 @@ def delete_column(col_id: int, brand_id: int = Depends(get_brand_id), _user=Depe
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
 
+@router.post("/todo/tasks")
+def create_unassigned_task(body: TaskBody, brand_id: int = Depends(get_brand_id), _user=Depends(get_current_user)):
+    if not body.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required.")
+    with get_db() as db:
+        task = models.TodoTask(
+            brand_id=brand_id,
+            column_id=None,
+            activity_id=body.activity_id,
+            title=body.title.strip(),
+            deadline=body.deadline or None,
+            notes=body.notes or None,
+            done=False,
+            created_at=datetime.utcnow(),
+        )
+        db.add(task)
+        db.commit()
+        return _board(db, brand_id)
+
+
 @router.post("/todo/columns/{col_id}/tasks")
 def create_task(col_id: int, body: TaskBody, brand_id: int = Depends(get_brand_id), _user=Depends(get_current_user)):
     if not body.title.strip():
@@ -228,13 +259,16 @@ def update_task(task_id: int, body: TaskBody, brand_id: int = Depends(get_brand_
         if body.done is not None:
             task.done = body.done
         if body.column_id is not None:
-            target_col = db.query(models.TodoColumn).filter(
-                models.TodoColumn.id == body.column_id,
-                models.TodoColumn.brand_id == brand_id,
-            ).first()
-            if not target_col:
-                raise HTTPException(status_code=404, detail="Target column not found.")
-            task.column_id = body.column_id
+            if body.column_id == 0:
+                task.column_id = None  # unassign
+            else:
+                target_col = db.query(models.TodoColumn).filter(
+                    models.TodoColumn.id == body.column_id,
+                    models.TodoColumn.brand_id == brand_id,
+                ).first()
+                if not target_col:
+                    raise HTTPException(status_code=404, detail="Target column not found.")
+                task.column_id = body.column_id
         db.commit()
         return _board(db, brand_id)
 
