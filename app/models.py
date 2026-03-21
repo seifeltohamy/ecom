@@ -221,6 +221,7 @@ class TodoTask(Base):
     title       = Column(String(256), nullable=False)
     deadline    = Column(String(32), nullable=True)   # "YYYY-MM-DD"
     notes       = Column(Text, nullable=True)
+    done        = Column(Boolean, nullable=False, default=False, server_default='false')
     sort_order  = Column(Integer, nullable=False, default=0)
     created_at  = Column(DateTime, default=datetime.utcnow, nullable=False)
 

@@ -3,6 +3,20 @@
 
 ---
 
+## Session — 2026-03-21 (To Do Kanban — done checkbox)
+
+### What Was Done
+- Migration 0020: `todo_tasks.done` Boolean NOT NULL DEFAULT false
+- `app/routers/todo.py`: added `done` to `TaskBody`, `_board()`, `update_task`
+- `frontend/src/pages/Todo.jsx`:
+  - Extracted `TaskCard` component with circle checkbox button
+  - Circle toggles done via `PUT /todo/tasks/{id}` with `done: !task.done`
+  - Active tasks shown normally; done tasks hidden by default
+  - Per-column "▸ Done (N)" collapsible section — expands to show done tasks with strikethrough + dimmed opacity
+  - Task count badge: "N tasks · N done"
+
+---
+
 ## Session — 2026-03-21 (To Do Kanban board)
 
 ### What Was Done

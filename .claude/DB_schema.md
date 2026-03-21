@@ -238,6 +238,7 @@ db.query(models.AppSettings).filter(
 | 0017_sms_suggestions | alembic/versions/0017_sms_suggestions.py | sms_suggestions table (brand_id, raw_text, amount, description, ref_number, tx_date, status, created_at); unique (brand_id, ref_number) |
 | 0018_sms_suggestion_type | alembic/versions/0018_sms_suggestion_type.py | sms_suggestions.type VARCHAR(8) DEFAULT 'out' + sms_suggestions.category VARCHAR(128) nullable |
 | 0019_todo_board | alembic/versions/0019_todo_board.py | todo_activities, todo_columns, todo_tasks tables (brand-scoped Kanban board with activity tagging) |
+| 0020_todo_task_done | alembic/versions/0020_todo_task_done.py | todo_tasks.done Boolean NOT NULL DEFAULT false |
 
 **Run migrations (from project root with .env set):**
 ```bash

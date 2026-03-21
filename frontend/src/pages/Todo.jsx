@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { authFetch } from '../utils/auth.js';
 import { S } from '../styles.js';
 import Alert from '../components/Alert.jsx';
@@ -47,6 +47,7 @@ function TaskModal({ task, columnId, activities, onClose, onSave, onDelete }) {
       deadline: deadline || null,
       notes: notes || null,
       activity_id: activityId ? parseInt(activityId) : null,
+      done: task?.done ?? false,
     });
     setSaving(false);
   }
@@ -166,10 +167,10 @@ function TaskModal({ task, columnId, activities, onClose, onSave, onDelete }) {
 
 // ── Activities Panel ──────────────────────────────────────────────────────────
 function ActivitiesPanel({ activities, onAdd, onRename, onDelete }) {
-  const [newName, setNewName]       = useState('');
-  const [editId, setEditId]         = useState(null);
-  const [editName, setEditName]     = useState('');
-  const [adding, setAdding]         = useState(false);
+  const [newName, setNewName]   = useState('');
+  const [editId, setEditId]     = useState(null);
+  const [editName, setEditName] = useState('');
+  const [adding, setAdding]     = useState(false);
 
   async function handleAdd() {
     if (!newName.trim()) return;
@@ -268,19 +269,89 @@ function ActivitiesPanel({ activities, onAdd, onRename, onDelete }) {
   );
 }
 
+// ── Task Card ─────────────────────────────────────────────────────────────────
+function TaskCard({ task, onToggleDone, onEdit, isDone }) {
+  const c = task.activity_id ? actColor(task.activity_id) : null;
+
+  return (
+    <div
+      onClick={() => onEdit(task)}
+      style={{
+        background: 'var(--surface2)', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-sm)', padding: '.6rem .75rem',
+        cursor: 'pointer', display: 'flex', gap: '.6rem', alignItems: 'flex-start',
+        opacity: isDone ? 0.55 : 1,
+        transition: 'border-color .15s, opacity .15s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+    >
+      {/* Checkbox circle */}
+      <button
+        onMouseDown={e => e.stopPropagation()}
+        onClick={e => { e.stopPropagation(); onToggleDone(task); }}
+        title={isDone ? 'Mark as active' : 'Mark as done'}
+        style={{
+          flexShrink: 0,
+          width: 18, height: 18, marginTop: 2,
+          borderRadius: '50%',
+          border: `2px solid ${isDone ? 'var(--success)' : 'var(--border2)'}`,
+          background: isDone ? 'var(--success)' : 'transparent',
+          color: isDone ? '#0c0a09' : 'transparent',
+          fontSize: '.65rem', fontWeight: 900,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', padding: 0,
+          transition: 'all .15s',
+        }}
+      >
+        {isDone ? '✓' : ''}
+      </button>
+
+      {/* Card content */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
+        {task.activity_name && c && (
+          <span style={{
+            alignSelf: 'flex-start',
+            background: c.bg, color: c.text,
+            borderRadius: 4, padding: '1px 7px', fontSize: '.7rem', fontWeight: 600,
+          }}>
+            {task.activity_name}
+          </span>
+        )}
+        <span style={{
+          fontSize: '.88rem', fontWeight: 600, color: 'var(--text)',
+          textDecoration: isDone ? 'line-through' : 'none',
+        }}>
+          {task.title}
+        </span>
+        {task.deadline && deadlineBadge(task.deadline)}
+        {task.notes && (
+          <span style={{
+            fontSize: '.75rem', color: 'var(--muted)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {task.notes}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Todo() {
-  const [columns, setColumns]               = useState([]);
-  const [activities, setActivities]         = useState([]);
-  const [activeFilter, setActiveFilter]     = useState(null);  // null = All
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState('');
-  const [editTask, setEditTask]             = useState(null);   // { isNew, columnId, task? }
-  const [showActPanel, setShowActPanel]     = useState(false);
-  const [newColName, setNewColName]         = useState('');
-  const [addingCol, setAddingCol]           = useState(false);
-  const [renamingCol, setRenamingCol]       = useState(null);  // col id
-  const [renameColVal, setRenameColVal]     = useState('');
+  const [columns, setColumns]           = useState([]);
+  const [activities, setActivities]     = useState([]);
+  const [activeFilter, setActiveFilter] = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState('');
+  const [editTask, setEditTask]         = useState(null);
+  const [showActPanel, setShowActPanel] = useState(false);
+  const [newColName, setNewColName]     = useState('');
+  const [addingCol, setAddingCol]       = useState(false);
+  const [renamingCol, setRenamingCol]   = useState(null);
+  const [renameColVal, setRenameColVal] = useState('');
+  const [showDone, setShowDone]         = useState({});  // { [colId]: bool }
 
   function loadBoard(data) {
     setColumns(data.columns);
@@ -346,12 +417,12 @@ export default function Todo() {
   }
 
   // Tasks
-  async function handleSaveTask({ title, deadline, notes, activity_id }) {
+  async function handleSaveTask({ title, deadline, notes, activity_id, done }) {
     try {
       if (editTask.isNew) {
         loadBoard(await apiCall(`/todo/columns/${editTask.columnId}/tasks`, 'POST', { title, deadline, notes, activity_id }));
       } else {
-        loadBoard(await apiCall(`/todo/tasks/${editTask.task.id}`, 'PUT', { title, deadline, notes, activity_id }));
+        loadBoard(await apiCall(`/todo/tasks/${editTask.task.id}`, 'PUT', { title, deadline, notes, activity_id, done }));
       }
       setEditTask(null);
     } catch (e) { alert(e.message); }
@@ -360,6 +431,17 @@ export default function Todo() {
     try {
       loadBoard(await apiCall(`/todo/tasks/${editTask.task.id}`, 'DELETE'));
       setEditTask(null);
+    } catch (e) { alert(e.message); }
+  }
+  async function handleToggleDone(task) {
+    try {
+      loadBoard(await apiCall(`/todo/tasks/${task.id}`, 'PUT', {
+        title: task.title,
+        deadline: task.deadline,
+        notes: task.notes,
+        activity_id: task.activity_id,
+        done: !task.done,
+      }));
     } catch (e) { alert(e.message); }
   }
 
@@ -373,11 +455,7 @@ export default function Todo() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveFilter(null)}
-          style={{
-            ...S.btnBase,
-            ...(activeFilter === null ? S.btnPrimary : S.btnOutline),
-            padding: '4px 14px', fontSize: '.8rem',
-          }}
+          style={{ ...S.btnBase, ...(activeFilter === null ? S.btnPrimary : S.btnOutline), padding: '4px 14px', fontSize: '.8rem' }}
         >
           All
         </button>
@@ -403,10 +481,7 @@ export default function Todo() {
         <button
           onClick={() => setShowActPanel(p => !p)}
           title="Manage Activities"
-          style={{
-            ...S.btnBase, ...S.btnOutline,
-            padding: '4px 10px', fontSize: '.85rem', marginLeft: 'auto',
-          }}
+          style={{ ...S.btnBase, ...S.btnOutline, padding: '4px 10px', fontSize: '.85rem', marginLeft: 'auto' }}
         >
           ⚙ Activities
         </button>
@@ -429,6 +504,10 @@ export default function Todo() {
           const visibleTasks = activeFilter
             ? col.tasks.filter(t => t.activity_id === activeFilter)
             : col.tasks;
+
+          const activeTasks = visibleTasks.filter(t => !t.done);
+          const doneTasks   = visibleTasks.filter(t => t.done);
+          const doneOpen    = !!showDone[col.id];
 
           return (
             <div key={col.id} style={{
@@ -475,51 +554,22 @@ export default function Todo() {
                 )}
               </div>
 
-              {/* Task count badge */}
+              {/* Task count */}
               <div style={{ fontSize: '.72rem', color: 'var(--muted)' }}>
-                {visibleTasks.length} task{visibleTasks.length !== 1 ? 's' : ''}
-                {activeFilter && col.tasks.length !== visibleTasks.length ? ` (${col.tasks.length} total)` : ''}
+                {activeTasks.length} task{activeTasks.length !== 1 ? 's' : ''}
+                {doneTasks.length > 0 ? ` · ${doneTasks.length} done` : ''}
               </div>
 
-              {/* Task cards */}
-              {visibleTasks.map(task => {
-                const c = task.activity_id ? actColor(task.activity_id) : null;
-                return (
-                  <div
-                    key={task.id}
-                    onClick={() => setEditTask({ isNew: false, columnId: col.id, task })}
-                    style={{
-                      background: 'var(--surface2)', border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius-sm)', padding: '.6rem .75rem',
-                      cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '.35rem',
-                      transition: 'border-color .15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                  >
-                    {/* Activity badge */}
-                    {task.activity_name && c && (
-                      <span style={{
-                        alignSelf: 'flex-start',
-                        background: c.bg, color: c.text,
-                        borderRadius: 4, padding: '1px 7px', fontSize: '.7rem', fontWeight: 600,
-                      }}>
-                        {task.activity_name}
-                      </span>
-                    )}
-                    <span style={{ fontSize: '.88rem', fontWeight: 600, color: 'var(--text)' }}>{task.title}</span>
-                    {task.deadline && deadlineBadge(task.deadline)}
-                    {task.notes && (
-                      <span style={{
-                        fontSize: '.75rem', color: 'var(--muted)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {task.notes}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              {/* Active task cards */}
+              {activeTasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  isDone={false}
+                  onToggleDone={handleToggleDone}
+                  onEdit={task => setEditTask({ isNew: false, columnId: col.id, task })}
+                />
+              ))}
 
               {/* Add task button */}
               <button
@@ -532,19 +582,40 @@ export default function Todo() {
               >
                 + Add task
               </button>
+
+              {/* Done section */}
+              {doneTasks.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowDone(prev => ({ ...prev, [col.id]: !doneOpen }))}
+                    style={{
+                      background: 'none', border: 'none', color: 'var(--muted)',
+                      fontSize: '.78rem', cursor: 'pointer', textAlign: 'left',
+                      padding: '2px 0', display: 'flex', alignItems: 'center', gap: '.3rem',
+                    }}
+                  >
+                    <span style={{ fontSize: '.65rem' }}>{doneOpen ? '▾' : '▸'}</span>
+                    Done ({doneTasks.length})
+                  </button>
+                  {doneOpen && doneTasks.map(task => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      isDone={true}
+                      onToggleDone={handleToggleDone}
+                      onEdit={task => setEditTask({ isNew: false, columnId: col.id, task })}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           );
         })}
 
         {/* Add person column */}
-        <div style={{
-          minWidth: 200, flexShrink: 0, alignSelf: 'flex-start',
-          display: 'flex', flexDirection: 'column', gap: '.5rem',
-        }}>
+        <div style={{ minWidth: 200, flexShrink: 0, alignSelf: 'flex-start', display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
           {addingCol ? (
-            <div style={{
-              ...S.card, display: 'flex', flexDirection: 'column', gap: '.5rem', minWidth: 200,
-            }}>
+            <div style={{ ...S.card, display: 'flex', flexDirection: 'column', gap: '.5rem', minWidth: 200 }}>
               <input
                 autoFocus
                 value={newColName}
