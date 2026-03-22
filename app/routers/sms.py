@@ -34,7 +34,8 @@ def parse_cib_sms(text: str) -> dict | None:
         "تم خصم"             in text or  # deduction phrase
         "تم تنفيذ"           in text or  # execution phrase (instant transfer)
         "المنتهي بـ ********4707" in text or  # account ending 4707
-        "# **2297"           in text     # card ending 2297
+        "# **2297"           in text or  # card ending 2297 (prefix format)
+        "**2297 #"           in text     # card ending 2297 (suffix format)
     )
     if not is_cib:
         return None
