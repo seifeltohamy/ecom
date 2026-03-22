@@ -69,10 +69,12 @@ export default function Settings() {
   const [alertTime2On,  setAlertTime2On]  = useState(true);
   const [alertDays,     setAlertDays]     = useState('30');
 
-  const [loading,      setLoading]      = useState(true);
-  const [saving,       setSaving]       = useState(false);
-  const [savingAlert,  setSavingAlert]  = useState(false);
-  const [msg,          setMsg]          = useState(null);
+  const [loading,           setLoading]           = useState(true);
+  const [saving,            setSaving]            = useState(false);
+  const [savingAlert,       setSavingAlert]        = useState(false);
+  const [testingStock,      setTestingStock]       = useState(false);
+  const [testingMeta,       setTestingMeta]        = useState(false);
+  const [msg,               setMsg]               = useState(null);
 
   // Meta Ads
   const [metaConnected,     setMetaConnected]     = useState(false);
@@ -282,6 +284,26 @@ export default function Settings() {
       : { type: 'error',   text: 'Failed to save settings.' });
   }
 
+  async function testStockAlert() {
+    setTestingStock(true);
+    setMsg(null);
+    const res = await authFetch('/settings/test-stock-alert', { method: 'POST' });
+    setTestingStock(false);
+    setMsg(res.ok
+      ? { type: 'success', text: 'Test alert sent — check your email.' }
+      : { type: 'error',   text: 'Failed to trigger test alert.' });
+  }
+
+  async function testMetaAlert() {
+    setTestingMeta(true);
+    setMetaMsg(null);
+    const res = await authFetch('/settings/test-meta-balance-alert', { method: 'POST' });
+    setTestingMeta(false);
+    setMetaMsg(res.ok
+      ? { type: 'success', text: 'Test alert sent — check your email.' }
+      : { type: 'error',   text: 'Failed to trigger test alert.' });
+  }
+
   async function saveAlert() {
     setSavingAlert(true);
     setMsg(null);
@@ -469,9 +491,14 @@ export default function Settings() {
           <span style={{ fontSize: '.9rem', color: 'var(--muted)' }}>days remaining</span>
         </div>
 
-        <Btn onClick={saveAlert} disabled={savingAlert || loading}>
-          {savingAlert ? 'Saving…' : 'Save Alert Settings'}
-        </Btn>
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+          <Btn onClick={saveAlert} disabled={savingAlert || loading}>
+            {savingAlert ? 'Saving…' : 'Save Alert Settings'}
+          </Btn>
+          <Btn variant="outline" onClick={testStockAlert} disabled={testingStock || loading}>
+            {testingStock ? 'Sending…' : 'Send Test Alert'}
+          </Btn>
+        </div>
       </Card>
 
       {/* ── Meta Ads Integration ── */}
@@ -610,6 +637,9 @@ export default function Settings() {
                 </div>
                 <Btn onClick={saveMetaThreshold} disabled={savingMetaThreshold}>
                   {savingMetaThreshold ? 'Saving…' : 'Save'}
+                </Btn>
+                <Btn variant="outline" onClick={testMetaAlert} disabled={testingMeta}>
+                  {testingMeta ? 'Sending…' : 'Test'}
                 </Btn>
               </div>
               <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.4rem' }}>
