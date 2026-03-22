@@ -57,6 +57,7 @@ export default function Settings() {
   const [showKey,             setShowKey]             = useState(false);
   const [showPass,            setShowPass]            = useState(false);
   const [showEmailPass,       setShowEmailPass]       = useState(false);
+  const [payoutDays,          setPayoutDays]          = useState('2');
 
   // Stock alert config
   const [alertEnabled,  setAlertEnabled]  = useState(true);
@@ -235,6 +236,7 @@ export default function Settings() {
         setBostaEmail(d.bosta_email || '');
         setBostaPassword(d.bosta_password || '');
         setBostaEmailPassword(d.bosta_email_password || '');
+        setPayoutDays(d.bosta_payout_days || '2');
         setAlertEnabled(d.alert_enabled !== 'false');
         setAlertTime1(d.alert_time_1 || '09:00');
         const t2 = d.alert_time_2 || '';
@@ -269,7 +271,7 @@ export default function Settings() {
     const res = await authFetch('/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ..._credPayload(), ..._alertPayload() }),
+      body: JSON.stringify({ ..._credPayload(), ..._alertPayload(), bosta_payout_days: payoutDays }),
     });
     setSaving(false);
     setMsg(res.ok
@@ -383,6 +385,20 @@ export default function Settings() {
             style={{ ...inputStyle, fontFamily: 'monospace' }}
           />
           {toggleBtn(showEmailPass, setShowEmailPass)}
+        </div>
+
+        <label style={labelStyle}>Payout email lookback</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.65rem', marginBottom: '1.5rem' }}>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={loading ? '' : payoutDays}
+            onChange={e => setPayoutDays(e.target.value)}
+            disabled={loading}
+            style={{ ...inputStyle, flex: 'none', width: 80, textAlign: 'center' }}
+          />
+          <span style={{ fontSize: '.9rem', color: 'var(--muted)' }}>days</span>
         </div>
 
         <Btn onClick={save} disabled={saving || loading}>

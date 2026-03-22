@@ -19,6 +19,7 @@ class SettingsUpdate(BaseModel):
     alert_time_2:         str | None = None
     alert_low_stock_days:      str | None = None
     meta_balance_threshold:    str | None = None
+    bosta_payout_days:         str | None = None
 
 
 @router.get("/settings")
@@ -40,6 +41,7 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         "meta_connected_name":      data.get("meta_connected_name", ""),
         "meta_ad_account_id":       data.get("meta_ad_account_id", ""),
         "meta_balance_threshold":   data.get("meta_balance_threshold", "5000"),
+        "bosta_payout_days":        data.get("bosta_payout_days", "2"),
     }
 
 
@@ -58,6 +60,7 @@ def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_i
         "alert_time_2":           payload.alert_time_2,
         "alert_low_stock_days":   payload.alert_low_stock_days,
         "meta_balance_threshold": payload.meta_balance_threshold,
+        "bosta_payout_days":      payload.bosta_payout_days,
     }
     updates = {k: v for k, v in raw.items() if v is not None and not (k in _CREDENTIAL_KEYS and v == "")}
     with get_db() as db:

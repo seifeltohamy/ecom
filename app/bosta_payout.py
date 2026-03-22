@@ -103,11 +103,12 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
         mail.login(gmail_user, gmail_pass)
         mail.select("inbox")
 
-        since = (datetime.utcnow() - timedelta(days=2)).strftime("%d-%b-%Y")
+        payout_days = int(settings.get('bosta_payout_days') or 2)
+        since = (datetime.utcnow() - timedelta(days=payout_days)).strftime("%d-%b-%Y")
         _, msgs = mail.search(None, f'FROM "no-reply@bosta.co" SINCE {since}')
         ids = msgs[0].split()
         result["emails_found"] = len(ids)
-        logger.info("Brand %s: %d email(s) from no-reply@bosta.co in last 2 days", brand_id, len(ids))
+        logger.info("Brand %s: %d email(s) from no-reply@bosta.co in last %d days", brand_id, len(ids), payout_days)
 
         for msg_id in ids:
             _, data = mail.fetch(msg_id, "(RFC822)")
