@@ -29,7 +29,13 @@ def parse_cib_sms(text: str) -> dict | None:
     if not text:
         return None
     # Must look like a CIB deduction message
-    is_cib = "19666" in text or "تم خصم" in text or "تم تنفيذ" in text
+    is_cib = (
+        "19666"               in text or  # CIB hotline number
+        "تم خصم"             in text or  # deduction phrase
+        "تم تنفيذ"           in text or  # execution phrase (instant transfer)
+        "المنتهي بـ ********4707" in text or  # account ending 4707
+        "# **2297"           in text     # card ending 2297
+    )
     if not is_cib:
         return None
 
