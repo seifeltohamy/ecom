@@ -83,7 +83,7 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
 
     Returns {"emails_found": int, "new": int, "error": str|None}
     """
-    result = {"emails_found": 0, "new": 0, "error": None}
+    result = {"emails_found": 0, "new": 0, "error": None, "payout_days": 2}
 
     # Get credentials
     settings = {
@@ -104,6 +104,7 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
         mail.select("inbox")
 
         payout_days = int(settings.get('bosta_payout_days') or 2)
+        result["payout_days"] = payout_days
         since = (datetime.utcnow() - timedelta(days=payout_days)).strftime("%d-%b-%Y")
         _, msgs = mail.search(None, f'FROM "no-reply@bosta.co" SINCE {since}')
         ids = msgs[0].split()

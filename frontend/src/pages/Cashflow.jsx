@@ -34,6 +34,7 @@ export default function Cashflow() {
   const [acceptingId,      setAcceptingId]     = useState(null);
   const [acceptForm,       setAcceptForm]      = useState({ month: '', category: '', notes: '', amount: '' });
   const [checkingPayouts,  setCheckingPayouts] = useState(false);
+  const [infoModal,        setInfoModal]       = useState(null); // { title, body }
 
   const loadMonths = useCallback(async () => {
     try {
@@ -88,15 +89,19 @@ export default function Cashflow() {
       const res  = await authFetch('/sms/check-bosta-payouts', { method: 'POST' });
       const data = await res.json();
       if (data.error) {
-        alert(`Check failed: ${data.error}`);
+        setInfoModal({ title: 'Check Failed', body: data.error });
       } else if (data.new > 0) {
         const updated = await authFetch('/cashflow/sms-suggestions').then(r => r.json());
         if (Array.isArray(updated)) { setSuggestions(updated); setShowSuggestions(true); }
       } else {
-        alert(`No new payouts found.\n${data.emails_found} Bosta email${data.emails_found !== 1 ? 's' : ''} from the last 2 days — none were Cashout receipts or already added.`);
+        const days = data.payout_days ?? 2;
+        setInfoModal({
+          title: 'No New Payouts',
+          body: `${data.emails_found} Bosta email${data.emails_found !== 1 ? 's' : ''} from the last ${days} day${days !== 1 ? 's' : ''} — none were Cashout receipts or already added.`,
+        });
       }
     } catch (e) {
-      alert(`Error: ${e.message}`);
+      setInfoModal({ title: 'Error', body: e.message });
     } finally {
       setCheckingPayouts(false);
     }
@@ -522,6 +527,19 @@ export default function Cashflow() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.5rem', marginTop: '1rem' }}>
               <Btn variant="outline" onClick={() => setConfirmRow(null)}>Cancel</Btn>
               <Btn variant="danger" onClick={() => { deleteRow(confirmRow); setConfirmRow(null); }}>Delete</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Info Modal ── */}
+      {infoModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 'var(--radius)', padding: '1.75rem', maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,.4)' }}>
+            <h3 style={{ margin: '0 0 .75rem', color: 'var(--text)', fontSize: '1.05rem' }}>{infoModal.title}</h3>
+            <p style={{ margin: '0 0 1.25rem', color: 'var(--muted)', fontSize: '.9rem', lineHeight: 1.5 }}>{infoModal.body}</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Btn onClick={() => setInfoModal(null)}>OK</Btn>
             </div>
           </div>
         </div>
