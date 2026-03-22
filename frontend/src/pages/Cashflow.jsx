@@ -95,10 +95,11 @@ export default function Cashflow() {
         if (Array.isArray(updated)) { setSuggestions(updated); setShowSuggestions(true); }
       } else {
         const days = data.payout_days ?? 2;
-        setInfoModal({
-          title: 'No New Payouts',
-          body: `${data.emails_found} Bosta email${data.emails_found !== 1 ? 's' : ''} from the last ${days} day${days !== 1 ? 's' : ''} — none were Cashout receipts or already added.`,
-        });
+        const matched = data.subject_matched ?? 0;
+        const detail = data.emails_found > 0 && matched === 0
+          ? `${data.emails_found} email${data.emails_found !== 1 ? 's' : ''} from no-reply@bosta.co found but none had a "Cashout" subject.`
+          : `${data.emails_found} Bosta email${data.emails_found !== 1 ? 's' : ''} from the last ${days} day${days !== 1 ? 's' : ''} — none were new Cashout receipts.`;
+        setInfoModal({ title: 'No New Payouts', body: detail });
       }
     } catch (e) {
       setInfoModal({ title: 'Error', body: e.message });

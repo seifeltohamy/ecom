@@ -83,7 +83,7 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
 
     Returns {"emails_found": int, "new": int, "error": str|None}
     """
-    result = {"emails_found": 0, "new": 0, "error": None, "payout_days": 2}
+    result = {"emails_found": 0, "subject_matched": 0, "new": 0, "error": None, "payout_days": 2}
 
     # Get credentials
     settings = {
@@ -101,7 +101,7 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
     try:
         mail = imaplib.IMAP4_SSL("imap.gmail.com")
         mail.login(gmail_user, gmail_pass)
-        mail.select("inbox")
+        mail.select('"[Gmail]/All Mail"')
 
         payout_days = int(settings.get('bosta_payout_days') or 2)
         result["payout_days"] = payout_days
@@ -125,8 +125,9 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
                 else:
                     subject += part
             logger.info("Brand %s: email subject: %r", brand_id, subject)
-            if "Cashout" not in subject and "cashout" not in subject:
+            if "Cashout" not in subject and "cashout" not in subject and "كاش أوت" not in subject:
                 continue
+            result["subject_matched"] += 1
 
             # Get plain text from HTML body
             body_text = ""
