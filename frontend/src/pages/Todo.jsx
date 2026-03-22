@@ -346,52 +346,81 @@ export default function Todo() {
     );
   }
 
-  // Handles drop: moves task to targetColId (0 = unassign), computes sort_order from insertBefore
+  // Optimistic state update — immediately reflects new order in UI before server responds
+  function applyOptimisticReorder(task, targetColId, newZoneOrder) {
+    const newColId = targetColId === 0 ? null : targetColId;
+    const newZoneWithOrder = newZoneOrder.map((t, i) => ({
+      ...t, column_id: newColId, sort_order: i,
+    }));
+    if (targetColId === 0) {
+      setUnassigned(prev => [
+        ...newZoneWithOrder,
+        ...prev.filter(t => t.done && t.id !== task.id),
+      ]);
+      setColumns(prev => prev.map(col => ({
+        ...col, tasks: col.tasks.filter(t => t.id !== task.id),
+      })));
+    } else {
+      setColumns(prev => prev.map(col => {
+        if (col.id === targetColId) {
+          const doneTasks = col.tasks.filter(t => t.done);
+          return { ...col, tasks: [...newZoneWithOrder, ...doneTasks] };
+        }
+        return { ...col, tasks: col.tasks.filter(t => t.id !== task.id) };
+      }));
+      setUnassigned(prev => prev.filter(t => t.id !== task.id));
+    }
+  }
+
+  // Handles drop: optimistic update first, then sync with POST /todo/reorder
   async function handleDrop(taskId, targetColId) {
     const allTasks = [...columns.flatMap(c => c.tasks), ...unassigned];
     const task = allTasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const currentColId = task.column_id ?? 0;
-    const isSameCol = currentColId === targetColId;
+    const isCrossColumn = (task.column_id ?? 0) !== targetColId;
 
-    // Sorted active tasks in target column, excluding the dragged task itself
-    const targetTasks = (
+    // Active tasks in target zone excluding dragged task
+    const zoneTasksWithout = (
       targetColId === 0
         ? unassigned
         : (columns.find(c => c.id === targetColId)?.tasks ?? [])
     ).filter(t => !t.done && t.id !== taskId);
 
-    // Find where to insert based on insertBefore state
+    // Compute insert index from insertBefore state
     const ib = insertBefore;
-    let insertIdx;
-    if (!ib || ib.taskId === null) {
-      insertIdx = targetTasks.length;
-    } else {
-      insertIdx = targetTasks.findIndex(t => t.id === ib.taskId);
-      if (insertIdx === -1) insertIdx = targetTasks.length;
+    let insertIdx = zoneTasksWithout.length; // default: append
+    if (ib?.taskId != null) {
+      const found = zoneTasksWithout.findIndex(t => t.id === ib.taskId);
+      if (found !== -1) insertIdx = found;
     }
 
-    const prev = targetTasks[insertIdx - 1];
-    const next = targetTasks[insertIdx];
-    let newSortOrder;
-    if (prev && next)   newSortOrder = (prev.sort_order + next.sort_order) / 2;
-    else if (prev)      newSortOrder = prev.sort_order + 1;
-    else if (next)      newSortOrder = next.sort_order - 1;
-    else                newSortOrder = 0;
+    const newZoneOrder = [
+      ...zoneTasksWithout.slice(0, insertIdx),
+      task,
+      ...zoneTasksWithout.slice(insertIdx),
+    ];
 
-    const body = {
-      title: task.title, deadline: task.deadline, notes: task.notes,
-      activity_id: task.activity_id, done: task.done,
-      sort_order: newSortOrder,
-    };
-    if (!isSameCol) body.column_id = targetColId;
+    // Snapshot for rollback on error
+    const prevColumns = columns;
+    const prevUnassigned = unassigned;
 
+    // Apply immediately — instant UI response
+    applyOptimisticReorder(task, targetColId, newZoneOrder);
     setInsertBefore(null);
     setDragOverCol(null);
+
+    // Sync with server
     try {
-      loadBoard(await apiCall(`/todo/tasks/${taskId}`, 'PUT', body));
-    } catch (e) { alert(e.message); }
+      loadBoard(await apiCall('/todo/reorder', 'POST', {
+        task_ids: newZoneOrder.map(t => t.id),
+        ...(isCrossColumn && { moved_task_id: taskId, new_column_id: targetColId }),
+      }));
+    } catch (e) {
+      setColumns(prevColumns);
+      setUnassigned(prevUnassigned);
+      alert(e.message);
+    }
   }
 
   // ── CRUD handlers ─────────────────────────────────────────────────────────────

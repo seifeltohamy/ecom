@@ -2,7 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional
+from sqlalchemy import func
+from typing import Optional, List
 
 from app.deps import get_db, get_current_user, get_brand_id
 from app import models
@@ -26,6 +27,11 @@ class TaskBody(BaseModel):
     done: Optional[bool] = None
     column_id: Optional[int] = None
     sort_order: Optional[float] = None
+
+class ReorderBody(BaseModel):
+    task_ids: List[int]
+    moved_task_id: Optional[int] = None   # only on cross-column move
+    new_column_id: Optional[int] = None   # 0=unassign, N=column ID
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -201,6 +207,10 @@ def create_unassigned_task(body: TaskBody, brand_id: int = Depends(get_brand_id)
     if not body.title.strip():
         raise HTTPException(status_code=400, detail="Title is required.")
     with get_db() as db:
+        max_sort = db.query(func.max(models.TodoTask.sort_order)).filter(
+            models.TodoTask.brand_id == brand_id,
+            models.TodoTask.column_id == None,
+        ).scalar()
         task = models.TodoTask(
             brand_id=brand_id,
             column_id=None,
@@ -209,6 +219,7 @@ def create_unassigned_task(body: TaskBody, brand_id: int = Depends(get_brand_id)
             deadline=body.deadline or None,
             notes=body.notes or None,
             done=False,
+            sort_order=(max_sort or -1) + 1,
             created_at=datetime.utcnow(),
         )
         db.add(task)
@@ -227,6 +238,10 @@ def create_task(col_id: int, body: TaskBody, brand_id: int = Depends(get_brand_i
         ).first()
         if not col:
             raise HTTPException(status_code=404, detail="Column not found.")
+        max_sort = db.query(func.max(models.TodoTask.sort_order)).filter(
+            models.TodoTask.brand_id == brand_id,
+            models.TodoTask.column_id == col_id,
+        ).scalar()
         task = models.TodoTask(
             brand_id=brand_id,
             column_id=col_id,
@@ -235,6 +250,7 @@ def create_task(col_id: int, body: TaskBody, brand_id: int = Depends(get_brand_i
             deadline=body.deadline or None,
             notes=body.notes or None,
             done=False,
+            sort_order=(max_sort or -1) + 1,
             created_at=datetime.utcnow(),
         )
         db.add(task)
@@ -272,6 +288,27 @@ def update_task(task_id: int, body: TaskBody, brand_id: int = Depends(get_brand_
                 if not target_col:
                     raise HTTPException(status_code=404, detail="Target column not found.")
                 task.column_id = body.column_id
+        db.commit()
+        return _board(db, brand_id)
+
+
+@router.post("/todo/reorder")
+def reorder_tasks(body: ReorderBody, brand_id: int = Depends(get_brand_id), _user=Depends(get_current_user)):
+    with get_db() as db:
+        if body.moved_task_id is not None and body.new_column_id is not None:
+            moved = db.query(models.TodoTask).filter(
+                models.TodoTask.id == body.moved_task_id,
+                models.TodoTask.brand_id == brand_id,
+            ).first()
+            if moved:
+                moved.column_id = None if body.new_column_id == 0 else body.new_column_id
+        for idx, task_id in enumerate(body.task_ids):
+            task = db.query(models.TodoTask).filter(
+                models.TodoTask.id == task_id,
+                models.TodoTask.brand_id == brand_id,
+            ).first()
+            if task:
+                task.sort_order = idx
         db.commit()
         return _board(db, brand_id)
 
