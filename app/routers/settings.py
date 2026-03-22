@@ -195,20 +195,27 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
 
 @router.post("/settings/trigger-stock-alert")
 def trigger_stock_alert(_admin: models.User = Depends(require_admin)):
-    """Manually fire the stock alert job right now (admin only)."""
+    """Manually fire the stock alert job right now (admin only). Runs synchronously and returns results."""
     from app.stock_alert import run_stock_alert_job
-    import threading
-    threading.Thread(target=lambda: run_stock_alert_job(force=True), daemon=True).start()
-    return {"ok": True, "message": "Stock alert job started — check server logs."}
+    try:
+        results = run_stock_alert_job(force=True)
+        sent    = [r for r in results if r["status"] == "sent"]
+        errors  = [r for r in results if r["status"] == "error"]
+        skipped = [r for r in results if r["status"] == "skipped"]
+        return {"ok": True, "results": results, "sent": len(sent), "errors": len(errors), "skipped": len(skipped)}
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
 
 
 @router.post("/settings/trigger-meta-balance-alert")
 def trigger_meta_balance_alert(_admin: models.User = Depends(require_admin)):
-    """Manually fire the Meta Ads balance alert job right now (admin only)."""
+    """Manually fire the Meta Ads balance alert job right now (admin only). Runs synchronously and returns results."""
     from app.meta_balance_alert import run_meta_balance_alert_job
-    import threading
-    threading.Thread(target=lambda: run_meta_balance_alert_job(force=True), daemon=True).start()
-    return {"ok": True, "message": "Meta balance alert job started — check server logs."}
+    try:
+        run_meta_balance_alert_job(force=True)
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
 
 
 @router.put("/stock-value/purchase-price")

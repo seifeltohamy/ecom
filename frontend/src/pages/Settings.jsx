@@ -287,11 +287,17 @@ export default function Settings() {
   async function testStockAlert() {
     setTestingStock(true);
     setMsg(null);
-    const res = await authFetch('/settings/trigger-stock-alert', { method: 'POST' });
-    setTestingStock(false);
-    setMsg(res.ok
-      ? { type: 'success', text: 'Test alert sent — check your email.' }
-      : { type: 'error',   text: 'Failed to trigger test alert.' });
+    try {
+      const res  = await authFetch('/settings/trigger-stock-alert', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { setMsg({ type: 'error', text: data.detail || 'Failed to trigger test alert.' }); return; }
+      const sent    = data.results?.filter(r => r.status === 'sent')    || [];
+      const errors  = data.results?.filter(r => r.status === 'error')   || [];
+      const skipped = data.results?.filter(r => r.status === 'skipped') || [];
+      if (errors.length)  setMsg({ type: 'error',   text: `Error: ${errors.map(r => `${r.brand}: ${r.reason}`).join('; ')}` });
+      else if (sent.length) setMsg({ type: 'success', text: `Email sent to ${sent.map(r => r.brand).join(', ')} — check your inbox.` });
+      else setMsg({ type: 'error', text: `Skipped: ${skipped.map(r => `${r.brand} — ${r.reason}`).join('; ')}` });
+    } finally { setTestingStock(false); }
   }
 
   async function testMetaAlert() {

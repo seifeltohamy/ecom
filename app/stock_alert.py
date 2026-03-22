@@ -206,12 +206,14 @@ def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
 
 # ── Main job ───────────────────────────────────────────────────────────────────
 
-def run_stock_alert_job(force: bool = False):
+def run_stock_alert_job(force: bool = False) -> list[dict]:
     """Called by APScheduler every hour on the hour. Each brand's configured times gate sending.
-    Pass force=True to bypass the time gate (used by manual trigger endpoint)."""
+    Pass force=True to bypass the time gate (used by manual trigger endpoint).
+    Returns a list of per-brand result dicts."""
     now_hm = datetime.now(tz=timezone.utc).strftime("%H:%M")
     logger.info("Stock alert job running at %s UTC (force=%s)", now_hm, force)
 
+    results = []
     brands = _get_all_brands()
     for brand in brands:
         brand_id   = brand["brand_id"]
@@ -222,6 +224,7 @@ def run_stock_alert_job(force: bool = False):
             # Master toggle
             if settings.get("alert_enabled", "true") != "true":
                 logger.info("Brand %s (%s): alerts disabled, skipping", brand_id, brand_name)
+                results.append({"brand": brand_name, "status": "skipped", "reason": "alerts disabled"})
                 continue
 
             # Time gate — only send if current UTC HH:MM matches a configured time
@@ -230,6 +233,7 @@ def run_stock_alert_job(force: bool = False):
             matched = (time_1 and now_hm == time_1) or (time_2 and now_hm == time_2)
             if not matched and not force:
                 logger.info("Brand %s (%s): time %s not in [%s, %s], skipping", brand_id, brand_name, now_hm, time_1, time_2)
+                results.append({"brand": brand_name, "status": "skipped", "reason": f"time {now_hm} UTC not in [{time_1}, {time_2}]"})
                 continue
 
             # Credentials
@@ -237,6 +241,7 @@ def run_stock_alert_job(force: bool = False):
             password = settings.get("bosta_email_password", "")
             if not email or not password:
                 logger.info("Brand %s (%s): no email/password configured, skipping", brand_id, brand_name)
+                results.append({"brand": brand_name, "status": "skipped", "reason": "no Gmail credentials configured in Settings"})
                 continue
 
             # Threshold
@@ -248,6 +253,7 @@ def run_stock_alert_job(force: bool = False):
             all_rows = _fetch_stock_rows(brand_id, settings)
             if not all_rows:
                 logger.info("Brand %s (%s): no stock data, skipping", brand_id, brand_name)
+                results.append({"brand": brand_name, "status": "skipped", "reason": "no stock data (check Bosta API key)"})
                 continue
 
             # Sort all rows: out-of-stock first, then by days_remaining asc, then healthy
@@ -256,14 +262,15 @@ def run_stock_alert_job(force: bool = False):
                 r["days_remaining"] if r["days_remaining"] is not None else 9999,
             ))
 
-            is_morning = (time_1 and now_hm == time_1)
+            is_morning = (time_1 and now_hm == time_1) or force
 
             if is_morning:
-                # Morning: always send full inventory report
+                # Morning (or forced): always send full inventory report
                 subject = f"📦 EcomHQ Daily Inventory — {brand_name} — {len(all_rows)} product(s)"
                 html    = _build_html(brand_name, all_rows, low_stock_days, daily_report=True)
                 _send_email(email, password, subject, html)
                 logger.info("Brand %s (%s): sent daily inventory report (%d products)", brand_id, brand_name, len(all_rows))
+                results.append({"brand": brand_name, "status": "sent", "type": "daily inventory", "products": len(all_rows)})
             else:
                 # Evening: send only low-stock alert, skip if all healthy
                 low = [
@@ -273,13 +280,17 @@ def run_stock_alert_job(force: bool = False):
                 ]
                 if not low:
                     logger.info("Brand %s (%s): all stock healthy, no evening alert sent", brand_id, brand_name)
+                    results.append({"brand": brand_name, "status": "skipped", "reason": "all stock healthy"})
                     continue
                 subject = f"⚠️ EcomHQ Low Stock Alert — {brand_name} — {len(low)} item(s) need attention"
                 html    = _build_html(brand_name, low, low_stock_days, daily_report=False)
                 _send_email(email, password, subject, html)
                 logger.info("Brand %s (%s): sent low-stock alert for %d items", brand_id, brand_name, len(low))
+                results.append({"brand": brand_name, "status": "sent", "type": "low stock alert", "items": len(low)})
 
         except Exception as exc:
             logger.error("Brand %s (%s): error — %s", brand_id, brand_name, exc, exc_info=True)
+            results.append({"brand": brand_name, "status": "error", "reason": str(exc)})
 
     logger.info("Stock alert job finished")
+    return results
