@@ -96,16 +96,15 @@ def get_spend_summary(access_token: str, ad_account_id: str,
 
 
 def _usd_to_egp_rate() -> float:
-    """Fetch live USD→EGP rate from frankfurter.app (free, no key required)."""
+    """Fetch live USD→EGP rate. Uses exchangerate-api.com (supports EGP, no key required)."""
     try:
         r = httpx.get(
-            "https://api.frankfurter.app/latest",
-            params={"from": "USD", "to": "EGP"},
+            "https://open.er-api.com/v6/latest/USD",
             timeout=8,
         )
         return float(r.json()["rates"]["EGP"])
     except Exception:
-        return 68.0   # fallback if API is unreachable
+        return 50.0   # fallback if API is unreachable
 
 
 def get_account_balance(access_token: str, ad_account_id: str) -> dict:

@@ -197,9 +197,7 @@ def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
     msg["To"]      = to_addr
     msg.attach(MIMEText(html, "html"))
 
-    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-        smtp.ehlo()
-        smtp.starttls()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(to_addr, gmail_password)
         smtp.sendmail(to_addr, to_addr, msg.as_string())
 
