@@ -6,8 +6,12 @@ Each brand configures its own alert times and threshold via Settings.
 
 import json
 import logging
-import os
+import smtplib
+import socket
+import ssl
 from datetime import datetime, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import httpx
 
@@ -188,20 +192,29 @@ def _build_html(brand_name: str, rows: list, low_stock_days: int, daily_report: 
 
 # ── Email sending ──────────────────────────────────────────────────────────────
 
-def _send_email(to_addr: str, _gmail_password: str, subject: str, html: str):
-    """Send email via Resend HTTPS API (RESEND_API_KEY env var required).
-    Railway blocks outbound SMTP so we use HTTP instead."""
-    api_key = os.getenv("RESEND_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("RESEND_API_KEY env var not set — add it in Railway Variables")
-    r = httpx.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={"from": "EcomHQ <alerts@ecomhq.app>", "to": [to_addr], "subject": subject, "html": html},
-        timeout=15,
-    )
-    if r.status_code not in (200, 201):
-        raise RuntimeError(f"Resend API error {r.status_code}: {r.text}")
+class _IPv4SMTP(smtplib.SMTP):
+    """SMTP that forces IPv4 — Railway containers fail on IPv6 with ENETUNREACH."""
+    def _get_socket(self, host, port, timeout):
+        addrs = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        af, socktype, proto, _, sa = addrs[0]
+        sock = socket.socket(af, socktype, proto)
+        sock.settimeout(timeout if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT else 30)
+        sock.connect(sa)
+        return sock
+
+
+def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = to_addr
+    msg["To"]      = to_addr
+    msg.attach(MIMEText(html, "html"))
+
+    with _IPv4SMTP("smtp.gmail.com", 587) as smtp:
+        smtp.ehlo()
+        smtp.starttls(context=ssl.create_default_context())
+        smtp.login(to_addr, gmail_password)
+        smtp.sendmail(to_addr, to_addr, msg.as_string())
 
 
 # ── Main job ───────────────────────────────────────────────────────────────────
