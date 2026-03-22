@@ -161,7 +161,7 @@ function ActivitiesPanel({ activities, onAdd, onRename, onDelete }) {
   );
 }
 
-// ── Task Card (shared across both views) ──────────────────────────────────────
+// ── Task Card ─────────────────────────────────────────────────────────────────
 function TaskCard({ task, isDone, onToggleDone, onEdit, onDragStart, onDragEnd }) {
   const c = task.activity_id ? actColor(task.activity_id) : null;
   return (
@@ -180,7 +180,6 @@ function TaskCard({ task, isDone, onToggleDone, onEdit, onDragStart, onDragEnd }
       onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
     >
-      {/* Checkbox circle */}
       <button
         onMouseDown={e => e.stopPropagation()}
         onClick={e => { e.stopPropagation(); onToggleDone(task); }}
@@ -217,23 +216,31 @@ function TaskCard({ task, isDone, onToggleDone, onEdit, onDragStart, onDragEnd }
   );
 }
 
+// ── Insert indicator line ─────────────────────────────────────────────────────
+const InsertLine = () => (
+  <div style={{ height: 2, background: 'var(--accent)', borderRadius: 2, margin: '2px 0', flexShrink: 0 }} />
+);
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Todo() {
   const [columns, setColumns]           = useState([]);
   const [unassigned, setUnassigned]     = useState([]);
   const [activities, setActivities]     = useState([]);
-  const [viewMode, setViewMode]         = useState('kanban');   // 'kanban' | 'activity'
-  const [activeFilter, setActiveFilter] = useState(null);       // kanban filter
+  const [viewMode, setViewMode]         = useState('kanban');
+  const [activeFilter, setActiveFilter] = useState(null);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState('');
-  const [editTask, setEditTask]         = useState(null);        // { isNew, columnId, task?, prefillActivityId? }
+  const [editTask, setEditTask]         = useState(null);
   const [showActPanel, setShowActPanel] = useState(false);
   const [newColName, setNewColName]     = useState('');
   const [addingCol, setAddingCol]       = useState(false);
   const [renamingCol, setRenamingCol]   = useState(null);
   const [renameColVal, setRenameColVal] = useState('');
-  const [showDone, setShowDone]         = useState({});          // { [colId]: bool }
-  const [dragOverCol, setDragOverCol]   = useState(null);       // colId being hovered
+  const [showDone, setShowDone]         = useState({});
+  const [dragOverCol, setDragOverCol]   = useState(null);
+  // { zoneKey: string, taskId: number|null }
+  // taskId = the task to insert BEFORE; null = append at end of zone
+  const [insertBefore, setInsertBefore] = useState(null);
 
   function loadBoard(data) {
     setColumns(data.columns);
@@ -261,26 +268,42 @@ export default function Todo() {
     return res.json();
   }
 
-  // Drag-and-drop — move task to a different column (0 = unassign)
-  async function handleDrop(taskId, targetColId) {
-    const allTasks = [...columns.flatMap(c => c.tasks), ...unassigned];
-    const task = allTasks.find(t => t.id === taskId);
-    if (!task) return;
-    const currentColId = task.column_id ?? 0;
-    if (currentColId === targetColId) return;
-    try {
-      loadBoard(await apiCall(`/todo/tasks/${taskId}`, 'PUT', {
-        title: task.title, deadline: task.deadline, notes: task.notes,
-        activity_id: task.activity_id, done: task.done,
-        column_id: targetColId,  // 0 = unassign
-      }));
-    } catch (e) { alert(e.message); }
+  // ── Drag helpers ─────────────────────────────────────────────────────────────
+
+  function taskDragProps(task) {
+    return {
+      onDragStart: e => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('taskId', String(task.id));
+      },
+      onDragEnd: () => {
+        setDragOverCol(null);
+        setInsertBefore(null);
+      },
+    };
   }
 
-  function dropZoneProps(colId) {
+  // Drop zone on a column container.
+  // colId: the actual column id (0 = unassign), used for handleDrop
+  // zoneKey: unique string for this zone, used for insertBefore matching
+  // highlightKey: what to set dragOverCol to (defaults to colId, use zoneKey for activity cells)
+  function dropZoneProps(colId, zoneKey, highlightKey) {
+    const hKey = highlightKey !== undefined ? highlightKey : colId;
     return {
-      onDragOver: e => { e.preventDefault(); setDragOverCol(colId); },
-      onDragLeave: () => setDragOverCol(null),
+      onDragOver: e => {
+        e.preventDefault();
+        setDragOverCol(hKey);
+        // Only set insertBefore when cursor is over empty column space (not a task card)
+        if (e.target === e.currentTarget) {
+          setInsertBefore({ zoneKey, taskId: null });
+        }
+      },
+      onDragLeave: e => {
+        // Only clear when truly leaving the column (not just entering a child element)
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setDragOverCol(null);
+        }
+      },
       onDrop: e => {
         e.preventDefault();
         setDragOverCol(null);
@@ -290,17 +313,89 @@ export default function Todo() {
     };
   }
 
-  function taskDragProps(task) {
-    return {
-      onDragStart: e => {
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('taskId', String(task.id));
-      },
-      onDragEnd: () => setDragOverCol(null),
-    };
+  // onDragOver for a task wrapper — detects top/bottom half to set insert position
+  function taskWrapperDragOver(e, zoneKey, task, nextTask, highlightKey) {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isTopHalf = e.clientY < rect.top + rect.height / 2;
+    setInsertBefore({ zoneKey, taskId: isTopHalf ? task.id : (nextTask?.id ?? null) });
+    setDragOverCol(highlightKey);
   }
 
-  // Activities
+  // Render a list of tasks with insertion indicators between them
+  function renderTaskList(tasks, zoneKey, highlightKey, onEditFn) {
+    return (
+      <>
+        {tasks.map((task, idx) => {
+          const nextTask = tasks[idx + 1];
+          const showLine = insertBefore?.zoneKey === zoneKey && insertBefore?.taskId === task.id;
+          return (
+            <div key={task.id}
+              onDragOver={e => taskWrapperDragOver(e, zoneKey, task, nextTask, highlightKey)}
+            >
+              {showLine && <InsertLine />}
+              <TaskCard task={task} isDone={task.done}
+                onToggleDone={handleToggleDone}
+                onEdit={onEditFn}
+                {...taskDragProps(task)} />
+            </div>
+          );
+        })}
+        {insertBefore?.zoneKey === zoneKey && insertBefore?.taskId === null && <InsertLine />}
+      </>
+    );
+  }
+
+  // Handles drop: moves task to targetColId (0 = unassign), computes sort_order from insertBefore
+  async function handleDrop(taskId, targetColId) {
+    const allTasks = [...columns.flatMap(c => c.tasks), ...unassigned];
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const currentColId = task.column_id ?? 0;
+    const isSameCol = currentColId === targetColId;
+
+    // Sorted active tasks in target column, excluding the dragged task itself
+    const targetTasks = (
+      targetColId === 0
+        ? unassigned
+        : (columns.find(c => c.id === targetColId)?.tasks ?? [])
+    ).filter(t => !t.done && t.id !== taskId);
+
+    // Find where to insert based on insertBefore state
+    const ib = insertBefore;
+    let insertIdx;
+    if (!ib || ib.taskId === null) {
+      insertIdx = targetTasks.length;
+    } else {
+      insertIdx = targetTasks.findIndex(t => t.id === ib.taskId);
+      if (insertIdx === -1) insertIdx = targetTasks.length;
+    }
+
+    const prev = targetTasks[insertIdx - 1];
+    const next = targetTasks[insertIdx];
+    let newSortOrder;
+    if (prev && next)   newSortOrder = (prev.sort_order + next.sort_order) / 2;
+    else if (prev)      newSortOrder = prev.sort_order + 1;
+    else if (next)      newSortOrder = next.sort_order - 1;
+    else                newSortOrder = 0;
+
+    const body = {
+      title: task.title, deadline: task.deadline, notes: task.notes,
+      activity_id: task.activity_id, done: task.done,
+      sort_order: newSortOrder,
+    };
+    if (!isSameCol) body.column_id = targetColId;
+
+    setInsertBefore(null);
+    setDragOverCol(null);
+    try {
+      loadBoard(await apiCall(`/todo/tasks/${taskId}`, 'PUT', body));
+    } catch (e) { alert(e.message); }
+  }
+
+  // ── CRUD handlers ─────────────────────────────────────────────────────────────
+
   async function handleAddActivity(name) {
     try { loadBoard(await apiCall('/todo/activities', 'POST', { name })); }
     catch (e) { alert(e.message); }
@@ -316,7 +411,6 @@ export default function Todo() {
     } catch (e) { alert(e.message); }
   }
 
-  // Columns
   async function handleAddCol() {
     if (!newColName.trim()) return;
     try {
@@ -337,12 +431,10 @@ export default function Todo() {
     catch (e) { alert(e.message); }
   }
 
-  // Tasks
   async function handleSaveTask({ title, deadline, notes, activity_id, done }) {
     try {
       if (editTask.isNew) {
         if (editTask.columnId === null) {
-          // Create unassigned task
           loadBoard(await apiCall('/todo/tasks', 'POST', { title, deadline, notes, activity_id }));
         } else {
           loadBoard(await apiCall(`/todo/columns/${editTask.columnId}/tasks`, 'POST', { title, deadline, notes, activity_id }));
@@ -371,7 +463,7 @@ export default function Todo() {
   if (loading) return <Alert type="loading">Loading board…</Alert>;
   if (error)   return <Alert type="error">{error}</Alert>;
 
-  // ── Kanban View ──────────────────────────────────────────────────────────────
+  // ── Kanban View ───────────────────────────────────────────────────────────────
   function renderKanban() {
     return (
       <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '1rem', alignItems: 'flex-start' }}>
@@ -380,11 +472,12 @@ export default function Todo() {
           const activeTasks  = visibleTasks.filter(t => !t.done);
           const doneTasks    = visibleTasks.filter(t => t.done);
           const doneOpen     = !!showDone[col.id];
+          const zoneKey      = `col-${col.id}`;
           const isOver       = dragOverCol === col.id;
 
           return (
             <div key={col.id}
-              {...dropZoneProps(col.id)}
+              {...dropZoneProps(col.id, zoneKey, col.id)}
               style={{
                 ...S.card,
                 minWidth: 260, maxWidth: 260, flexShrink: 0,
@@ -415,27 +508,18 @@ export default function Todo() {
                 )}
               </div>
 
-              {/* Task count */}
               <div style={{ fontSize: '.72rem', color: 'var(--muted)' }}>
                 {activeTasks.length} task{activeTasks.length !== 1 ? 's' : ''}
                 {doneTasks.length > 0 ? ` · ${doneTasks.length} done` : ''}
               </div>
 
-              {/* Active tasks */}
-              {activeTasks.map(task => (
-                <TaskCard key={task.id} task={task} isDone={false}
-                  onToggleDone={handleToggleDone}
-                  onEdit={t => setEditTask({ isNew: false, columnId: col.id, task: t })}
-                  {...taskDragProps(task)} />
-              ))}
+              {renderTaskList(activeTasks, zoneKey, col.id, t => setEditTask({ isNew: false, columnId: col.id, task: t }))}
 
-              {/* Add task */}
               <button onClick={() => setEditTask({ isNew: true, columnId: col.id, task: null })}
                 style={{ ...S.btnBase, ...S.btnOutline, width: '100%', justifyContent: 'center', fontSize: '.82rem', borderStyle: 'dashed' }}>
                 + Add task
               </button>
 
-              {/* Done section */}
               {doneTasks.length > 0 && (
                 <>
                   <button onClick={() => setShowDone(p => ({ ...p, [col.id]: !doneOpen }))}
@@ -479,12 +563,10 @@ export default function Todo() {
     );
   }
 
-  // ── Activity View ────────────────────────────────────────────────────────────
+  // ── Activity View ─────────────────────────────────────────────────────────────
   function renderActivityView() {
-    // Combine assigned + unassigned for section filtering
     const allTasks = [...columns.flatMap(c => c.tasks), ...unassigned];
 
-    // Build sections: one per activity + one for untagged tasks
     const sections = [
       ...activities.map(a => ({
         id: a.id,
@@ -501,10 +583,9 @@ export default function Todo() {
     ].filter(s => s.tasks.length > 0 || s.id !== null);
 
     if (sections.length === 0) {
-      return <p style={{ color: 'var(--muted)', fontSize: '.9rem' }}>No activities yet. Add one via ⚙ Activities, then add tasks and tag them.</p>;
+      return <p style={{ color: 'var(--muted)', fontSize: '.9rem' }}>No activities yet. Add one via ⚙ Activities.</p>;
     }
 
-    // Columns for activity grid: "Unassigned" first, then people
     const gridCols = [{ id: 0, name: 'Unassigned', isUnassigned: true }, ...columns];
 
     return (
@@ -516,7 +597,6 @@ export default function Todo() {
 
           return (
             <div key={section.id ?? 'untagged'}>
-              {/* Section header */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '.75rem' }}>
                 <span style={{ background: section.color.bg, color: section.color.text, borderRadius: 6, padding: '3px 12px', fontSize: '.82rem', fontWeight: 700 }}>
                   {section.name}
@@ -524,7 +604,6 @@ export default function Todo() {
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
 
-              {/* Grid: Unassigned + person columns */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: `repeat(${gridCols.length}, minmax(200px, 1fr))`,
@@ -551,21 +630,14 @@ export default function Todo() {
                 {/* Task cells */}
                 {gridCols.map(col => {
                   const cellKey = `act-${section.id}-${col.id}`;
-                  const isOver = dragOverCol === cellKey;
+                  const isOver  = dragOverCol === cellKey;
                   const cellTasks = col.isUnassigned
-                    ? sectionUnassigned
-                    : section.tasks.filter(t => t.column_id === col.id);
+                    ? sectionUnassigned.filter(t => !t.done)
+                    : section.tasks.filter(t => t.column_id === col.id && !t.done);
 
                   return (
                     <div key={col.id}
-                      onDragOver={e => { e.preventDefault(); setDragOverCol(cellKey); }}
-                      onDragLeave={() => setDragOverCol(null)}
-                      onDrop={e => {
-                        e.preventDefault();
-                        setDragOverCol(null);
-                        const taskId = parseInt(e.dataTransfer.getData('taskId'));
-                        if (taskId) handleDrop(taskId, col.id);  // col.id=0 → unassign
-                      }}
+                      {...dropZoneProps(col.id, cellKey, cellKey)}
                       style={{
                         background: isOver
                           ? (col.isUnassigned ? 'rgba(168,162,158,0.1)' : 'rgba(249,115,22,0.06)')
@@ -579,13 +651,13 @@ export default function Todo() {
                         transition: 'background .15s, border-color .15s',
                       }}
                     >
-                      {cellTasks.map(task => (
-                        <TaskCard key={task.id} task={task} isDone={task.done}
-                          onToggleDone={handleToggleDone}
-                          onEdit={t => setEditTask({ isNew: false, columnId: col.isUnassigned ? null : col.id, task: t })}
-                          {...taskDragProps(task)} />
-                      ))}
-                      {/* Add task button in Unassigned cell */}
+                      {renderTaskList(
+                        cellTasks,
+                        cellKey,
+                        cellKey,
+                        t => setEditTask({ isNew: false, columnId: col.isUnassigned ? null : col.id, task: t })
+                      )}
+
                       {col.isUnassigned && (
                         <button
                           onClick={() => setEditTask({
@@ -596,15 +668,15 @@ export default function Todo() {
                           style={{
                             ...S.btnBase, ...S.btnOutline,
                             width: '100%', justifyContent: 'center',
-                            fontSize: '.75rem', borderStyle: 'dashed',
-                            opacity: 0.7,
+                            fontSize: '.75rem', borderStyle: 'dashed', opacity: 0.7,
                           }}
                         >
                           + Add task
                         </button>
                       )}
+
                       {cellTasks.length === 0 && !col.isUnassigned && (
-                        <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <span style={{ fontSize: '.7rem', color: 'var(--border2)' }}>drop here</span>
                         </div>
                       )}
@@ -622,9 +694,7 @@ export default function Todo() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-      {/* Top bar: view toggle + activity filters (kanban only) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', flexWrap: 'wrap' }}>
-        {/* View toggle */}
         <div style={{ display: 'flex', border: '1px solid var(--border2)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', flexShrink: 0 }}>
           {[['kanban', '☰ Kanban'], ['activity', '⊞ Activity']].map(([mode, label]) => (
             <button key={mode} onClick={() => setViewMode(mode)}
@@ -637,7 +707,6 @@ export default function Todo() {
           ))}
         </div>
 
-        {/* Activity filter pills — kanban only */}
         {viewMode === 'kanban' && (
           <>
             <button onClick={() => setActiveFilter(null)}
@@ -657,22 +726,18 @@ export default function Todo() {
           </>
         )}
 
-        {/* Manage Activities gear */}
         <button onClick={() => setShowActPanel(p => !p)} title="Manage Activities"
           style={{ ...S.btnBase, ...S.btnOutline, padding: '4px 10px', fontSize: '.85rem', marginLeft: 'auto' }}>
           ⚙ Activities
         </button>
       </div>
 
-      {/* Activities management panel */}
       {showActPanel && (
         <ActivitiesPanel activities={activities} onAdd={handleAddActivity} onRename={handleRenameActivity} onDelete={handleDeleteActivity} />
       )}
 
-      {/* Main board */}
       {viewMode === 'kanban' ? renderKanban() : renderActivityView()}
 
-      {/* Task modal */}
       {editTask && (
         <TaskModal
           task={editTask.task}

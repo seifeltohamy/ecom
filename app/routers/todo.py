@@ -25,6 +25,7 @@ class TaskBody(BaseModel):
     activity_id: Optional[int] = None
     done: Optional[bool] = None
     column_id: Optional[int] = None
+    sort_order: Optional[float] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -256,6 +257,8 @@ def update_task(task_id: int, body: TaskBody, brand_id: int = Depends(get_brand_
         task.deadline = body.deadline or None
         task.notes = body.notes or None
         task.activity_id = body.activity_id
+        if body.sort_order is not None:
+            task.sort_order = body.sort_order
         if body.done is not None:
             task.done = body.done
         if body.column_id is not None:
