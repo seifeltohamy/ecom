@@ -171,24 +171,40 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
                 existing = db.query(models.SmsSuggestion).filter(
                     models.SmsSuggestion.brand_id == brand_id,
                     models.SmsSuggestion.ref_number == invoice,
+                    models.SmsSuggestion.status.in_(["pending", "accepted"]),
                 ).first()
                 if existing:
-                    logger.debug("Brand %s: invoice %s already exists, skipping", brand_id, invoice)
+                    logger.debug("Brand %s: invoice %s already pending/accepted, skipping", brand_id, invoice)
                     continue
 
-            suggestion = models.SmsSuggestion(
-                brand_id    = brand_id,
-                raw_text    = body_text[:500],
-                amount      = amount,
-                description = "Bosta Payout",
-                ref_number  = invoice,
-                tx_date     = tx_date,
-                type        = "in",
-                category    = "Bosta",
-                status      = "pending",
-                created_at  = datetime.utcnow(),
-            )
-            db.add(suggestion)
+            # If a dismissed suggestion exists for this invoice, reset it to pending
+            dismissed = db.query(models.SmsSuggestion).filter(
+                models.SmsSuggestion.brand_id == brand_id,
+                models.SmsSuggestion.ref_number == invoice,
+                models.SmsSuggestion.status == "dismissed",
+            ).first() if invoice else None
+
+            if dismissed:
+                dismissed.status     = "pending"
+                dismissed.amount     = amount
+                dismissed.tx_date    = tx_date
+                dismissed.raw_text   = body_text[:500]
+                dismissed.created_at = datetime.utcnow()
+                suggestion = dismissed
+            else:
+                suggestion = models.SmsSuggestion(
+                    brand_id    = brand_id,
+                    raw_text    = body_text[:500],
+                    amount      = amount,
+                    description = "Bosta Payout",
+                    ref_number  = invoice,
+                    tx_date     = tx_date,
+                    type        = "in",
+                    category    = "Bosta",
+                    status      = "pending",
+                    created_at  = datetime.utcnow(),
+                )
+                db.add(suggestion)
             db.commit()
             result["new"] += 1
             logger.info("Brand %s: created Bosta payout suggestion — %s EGP (invoice %s)", brand_id, amount, invoice)
