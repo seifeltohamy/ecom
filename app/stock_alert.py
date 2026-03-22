@@ -6,12 +6,8 @@ Each brand configures its own alert times and threshold via Settings.
 
 import json
 import logging
-import smtplib
-import socket
-import ssl
+import os
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 import httpx
 
@@ -192,27 +188,24 @@ def _build_html(brand_name: str, rows: list, low_stock_days: int, daily_report: 
 
 # ── Email sending ──────────────────────────────────────────────────────────────
 
-class _IPv4SMTP_SSL(smtplib.SMTP_SSL):
-    """SMTP_SSL that forces IPv4 — Railway blocks IPv6 and port 587; use port 465 via IPv4."""
-    def _get_socket(self, host, port, timeout):
-        addrs = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-        af, socktype, proto, _, sa = addrs[0]
-        sock = socket.socket(af, socktype, proto)
-        sock.settimeout(timeout if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT else 30)
-        sock.connect(sa)
-        return self.context.wrap_socket(sock, server_hostname=host)
-
-
-def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = to_addr
-    msg["To"]      = to_addr
-    msg.attach(MIMEText(html, "html"))
-
-    with _IPv4SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as smtp:
-        smtp.login(to_addr, gmail_password)
-        smtp.sendmail(to_addr, to_addr, msg.as_string())
+def _send_email(to_addr: str, _gmail_password: str, subject: str, html: str):
+    """Send via Resend HTTPS API — Railway blocks all outbound SMTP ports."""
+    api_key = os.getenv("RESEND_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY not set in environment")
+    r = httpx.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "from":    "EcomHQ Alerts <onboarding@resend.dev>",
+            "to":      [to_addr],
+            "subject": subject,
+            "html":    html,
+        },
+        timeout=15,
+    )
+    if r.status_code not in (200, 201):
+        raise RuntimeError(f"Resend error {r.status_code}: {r.text}")
 
 
 # ── Main job ───────────────────────────────────────────────────────────────────
