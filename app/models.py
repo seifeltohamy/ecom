@@ -227,3 +227,13 @@ class TodoTask(Base):
 
     column   = relationship("TodoColumn", back_populates="tasks")
     activity = relationship("TodoActivity")
+
+
+class WalletEntry(Base):
+    __tablename__ = "wallet_entries"
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id      = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    month_name    = Column(String(64), nullable=False)
+    month_net     = Column(Float, nullable=False)
+    balance_after = Column(Float, nullable=False)
+    created_at    = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -36,6 +36,8 @@ export default function Cashflow() {
   const [acceptingId,      setAcceptingId]     = useState(null);
   const [acceptForm,       setAcceptForm]      = useState({ month: '', category: '', notes: '', amount: '' });
   const [checkingPayouts,  setCheckingPayouts] = useState(false);
+  const [wallet,           setWallet]          = useState({ balance: 0, history: [] });
+  const [showWalletHistory, setShowWalletHistory] = useState(false);
   const { dialogProps, confirm, info } = useDialog();
 
   const loadMonths = useCallback(async () => {
@@ -72,6 +74,7 @@ export default function Cashflow() {
   useEffect(() => {
     authFetch('/categories').then(r => r.json()).then(data => { if (Array.isArray(data)) setAllCats(data); });
     authFetch('/cashflow/sms-suggestions').then(r => r.json()).then(data => { if (Array.isArray(data)) setSuggestions(data); }).catch(() => {});
+    authFetch('/cashflow/wallet').then(r => r.json()).then(d => { if (d.history) setWallet(d); });
   }, []);
 
   const dismissSuggestion = async (id) => {
@@ -192,6 +195,7 @@ export default function Cashflow() {
     });
     const data = await res.json();
     if (data.months) setMonths(data.months);
+    authFetch('/cashflow/wallet').then(r => r.json()).then(d => { if (d.history) setWallet(d); });
     setActiveMonth(month);
   };
 
@@ -381,6 +385,16 @@ export default function Cashflow() {
               <div style={cs}><div style={ls}>Total In</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--success)' }}>EGP {fmt(totalIn)}</div></div>
               <div style={cs}><div style={ls}>Total Out</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: 'var(--danger)' }}>EGP {fmt(totalOut)}</div></div>
               <div style={cs}><div style={ls}>Net</div><div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: net >= 0 ? 'var(--success)' : 'var(--danger)' }}>EGP {fmt(net)}</div></div>
+              <div style={{ ...cs, borderTop: '3px solid var(--accent)' }}>
+                <div style={ls}>Master Wallet</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: wallet.balance >= 0 ? 'var(--success)' : 'var(--danger)' }}>EGP {fmt(wallet.balance)}</div>
+                <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: '.2rem' }}>Accumulated from previous months</div>
+                {wallet.history.length > 0 && (
+                  <button onClick={() => setShowWalletHistory(true)} style={{ marginTop: '.4rem', fontSize: '.78rem', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    View history →
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Table */}
@@ -536,6 +550,43 @@ export default function Cashflow() {
       )}
 
       <Dialog {...dialogProps} />
+
+      {/* ── Wallet History Modal ── */}
+      {showWalletHistory && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}
+          onMouseDown={e => { if (e.target === e.currentTarget) setShowWalletHistory(false); }}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 'var(--radius)', padding: '1.75rem', maxWidth: 520, width: '95%', boxShadow: '0 8px 32px rgba(0,0,0,.45)', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ margin: '0 0 1.25rem', color: 'var(--text)', fontSize: '1.05rem', fontWeight: 600 }}>Master Wallet History</h3>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.875rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border2)' }}>
+                    <th style={{ textAlign: 'left', padding: '.5rem .75rem', color: 'var(--muted)', fontWeight: 600 }}>Month</th>
+                    <th style={{ textAlign: 'right', padding: '.5rem .75rem', color: 'var(--muted)', fontWeight: 600 }}>Net</th>
+                    <th style={{ textAlign: 'right', padding: '.5rem .75rem', color: 'var(--muted)', fontWeight: 600 }}>Balance After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {wallet.history.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '.55rem .75rem', color: 'var(--text)' }}>{row.month_name}</td>
+                      <td style={{ padding: '.55rem .75rem', textAlign: 'right', color: row.month_net >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
+                        {row.month_net >= 0 ? '+' : ''}EGP {fmt(row.month_net)}
+                      </td>
+                      <td style={{ padding: '.55rem .75rem', textAlign: 'right', color: row.balance_after >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                        EGP {fmt(row.balance_after)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <Btn onClick={() => setShowWalletHistory(false)}>Close</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
