@@ -1,5 +1,7 @@
 from pathlib import Path
 import logging
+import fcntl
+import atexit
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -25,12 +27,38 @@ INDEX_HTML  = DIST / "index.html"
 
 app = FastAPI(title="EcomHQ")
 
-# ── Stock alert scheduler (09:00 + 18:00 UTC daily) ───────────────────────────
-_scheduler = BackgroundScheduler(timezone="UTC")
-_scheduler.add_job(run_stock_alert_job,        CronTrigger(minute=0))              # hourly; brands filter by configured times
-_scheduler.add_job(run_bosta_payout_check,    CronTrigger(hour="*/4", minute=0))   # every 4 hours
-_scheduler.add_job(run_meta_balance_alert_job, CronTrigger(minute="*/10"))          # every 10 mins; sends if balance ≤ threshold
-_scheduler.start()
+# ── Scheduler — only one worker should run it (file lock prevents duplicates) ──
+_scheduler = None
+_scheduler_lock_fh = None
+
+def _try_start_scheduler():
+    """Acquire an exclusive non-blocking lock. Only the first worker succeeds."""
+    global _scheduler, _scheduler_lock_fh
+    lock_path = Path("/tmp/ecomhq_scheduler.lock")
+    try:
+        fh = open(lock_path, "w")
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _scheduler_lock_fh = fh
+    except OSError:
+        logging.getLogger(__name__).info("Scheduler lock held by another worker — skipping")
+        return
+
+    _scheduler = BackgroundScheduler(timezone="UTC")
+    _scheduler.add_job(run_stock_alert_job,        CronTrigger(minute=0))             # hourly
+    _scheduler.add_job(run_bosta_payout_check,     CronTrigger(hour="*/4", minute=0)) # every 4 hours
+    _scheduler.add_job(run_meta_balance_alert_job, CronTrigger(minute="*/10"))         # every 10 mins
+    _scheduler.start()
+    logging.getLogger(__name__).info("Scheduler started (this worker holds the lock)")
+
+    def _shutdown():
+        if _scheduler and _scheduler.running:
+            _scheduler.shutdown(wait=False)
+        if _scheduler_lock_fh:
+            fcntl.flock(_scheduler_lock_fh, fcntl.LOCK_UN)
+            _scheduler_lock_fh.close()
+    atexit.register(_shutdown)
+
+_try_start_scheduler()
 
 app.include_router(auth.router)
 app.include_router(sms.router)      # must be before cashflow (avoids /cashflow/{month} swallowing /cashflow/sms-suggestions)
