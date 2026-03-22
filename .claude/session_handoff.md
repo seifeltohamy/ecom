@@ -3,6 +3,24 @@
 
 ---
 
+## Session — 2026-03-22 (To Do — drag-and-drop + Activity View + Unassigned tasks)
+
+### What Was Done
+- `app/routers/todo.py`: added `column_id: Optional[int]` to `TaskBody`; `_board()` now returns `unassigned[]` list; new `POST /todo/tasks` endpoint (creates task with `column_id=NULL`); `update_task` handles `column_id=0` → unassign
+- `app/models.py`: `TodoTask.column_id` → `nullable=True`; `TodoColumn.tasks` relationship cascade changed from `all, delete-orphan` → `all` (avoid SQLAlchemy treating NULL column_id as orphan)
+- Migration 0021: `ALTER COLUMN todo_tasks.column_id` → nullable
+- `frontend/src/pages/Todo.jsx`:
+  - HTML5 drag-and-drop on task cards; drop zones on kanban columns (accent border highlight)
+  - `handleDrop(taskId, targetColId)` — `column_id=0` unassigns; searches both `columns` and `unassigned` for dragged task
+  - View toggle: "☰ Kanban" | "⊞ Activity" buttons
+  - Activity View: sections per activity + Untagged; CSS grid of "Unassigned" + person columns
+  - "Unassigned" first column: shows tasks with `column_id=NULL` for that activity; "+" button creates unassigned task with activity pre-filled; drop zone sends `column_id=0` to unassign
+  - `TaskModal` accepts `prefillActivityId` prop for pre-filling activity when opening from section
+
+**Pending:** none
+
+---
+
 ## Session — 2026-03-21 (To Do Kanban — done checkbox)
 
 ### What Was Done

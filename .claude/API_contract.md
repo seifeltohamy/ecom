@@ -449,14 +449,24 @@
 
 ## To Do Board *(brand-scoped)*
 
+**Full board shape** (returned by all mutating endpoints):
+```json
+{
+  "activities": [{ "id": 1, "name": "R&D" }],
+  "columns": [{ "id": 1, "name": "Ahmed", "tasks": [{ "id": 1, "column_id": 1, "title": "...", "deadline": "YYYY-MM-DD|null", "notes": "...|null", "done": false, "activity_id": 1, "activity_name": "R&D", "sort_order": 0 }] }],
+  "unassigned": [{ "id": 5, "column_id": null, ... }]
+}
+```
+**Note:** `column_id` on tasks is nullable (NULL = unassigned, not yet assigned to a person).
+
 ### GET /todo
 - **Auth:** Bearer (any role) + brand in JWT
-- **Response:** `{ activities: [{id, name}], columns: [{id, name, tasks: [{id, title, deadline, notes, activity_id, activity_name, sort_order}]}] }`
+- **Response:** Full board (see shape above)
 
 ### POST /todo/activities
 - **Auth:** Bearer (any role) + brand in JWT
 - **Body:** `{ name: string }`
-- **Response:** Full board (same as GET /todo)
+- **Response:** Full board
 - **Errors:** 400 if name empty or already exists
 
 ### PUT /todo/activities/{act_id}
@@ -466,7 +476,7 @@
 
 ### DELETE /todo/activities/{act_id}
 - **Auth:** Bearer (any role) + brand in JWT
-- **Behavior:** Deletes activity; tasks with this activity_id have it set to NULL (SET NULL FK)
+- **Behavior:** Deletes activity; tasks with this activity_id have activity_id set to NULL (SET NULL FK)
 - **Response:** Full board
 
 ### POST /todo/columns
@@ -485,6 +495,11 @@
 - **Behavior:** Cascade deletes all tasks in this column
 - **Response:** Full board
 
+### POST /todo/tasks *(new — creates unassigned task)*
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ title: string, deadline: string|null, notes: string|null, activity_id: int|null }`
+- **Response:** Full board — task appears in `unassigned[]`
+
 ### POST /todo/columns/{col_id}/tasks
 - **Auth:** Bearer (any role) + brand in JWT
 - **Body:** `{ title: string, deadline: string|null, notes: string|null, activity_id: int|null }`
@@ -492,7 +507,10 @@
 
 ### PUT /todo/tasks/{task_id}
 - **Auth:** Bearer (any role) + brand in JWT
-- **Body:** `{ title, deadline, notes, activity_id }` (all nullable except title)
+- **Body:** `{ title, deadline, notes, activity_id, done?, column_id? }`
+  - `column_id` omitted or null → no change to assignment
+  - `column_id: 0` → unassign (set column_id to NULL)
+  - `column_id: N` → reassign to column N
 - **Response:** Full board
 
 ### DELETE /todo/tasks/{task_id}

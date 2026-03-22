@@ -115,7 +115,7 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-18): Meta Ads integration complete — FB popup OAuth, ad account picker, Home spend/balance chips, Analytics campaigns table, Bosta auto-fill ads_spent, BI snapshot. Stock daily email fix (morning = full inventory). Bosta IMAP fix (`[Gmail]/All Mail`). All code pushed (b2927a2).
+Last session (2026-03-22): To Do board complete — Kanban drag-and-drop between person columns, Activity View (sections per activity with CSS person grid), unassigned tasks (create without person, drag to assign). Migrations 0019–0021. All code pushed (918f25e).
 Env vars required in Railway: `GEMINI_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `VITE_META_APP_ID` (build var).
 Facebook App must whitelist `ecom-production-a643.up.railway.app` in App Domains + OAuth redirect URIs.
 Pending: password change, cashflow CSV export, iOS Shortcut empty body fix.

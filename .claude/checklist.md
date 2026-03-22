@@ -52,6 +52,9 @@
 - [x] Stock daily inventory email — morning always sends full inventory; evening sends low-stock only
 - [x] Bosta daily IMAP fix — select [Gmail]/All Mail instead of inbox
 - [x] To Do Kanban board — columns = people, tasks with deadline/notes/activity tag, filter by activity, manage activities panel (migration 0019)
+- [x] To Do done checkbox — circle toggle, done tasks collapse per column (migration 0020)
+- [x] To Do drag-and-drop — drag tasks between person columns; Activity View with CSS grid per activity section; drag between cells to reassign
+- [x] To Do unassigned tasks — "Unassigned" column in Activity View; create tasks without a person; drag to assign (migration 0021)
 
 ## In Progress
 
