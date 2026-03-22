@@ -3,6 +3,23 @@
 
 ---
 
+## Session — 2026-03-22 (To Do — drag sort fix + instant drag performance)
+
+### What Was Done
+- **Root cause fixed**: all new tasks had `sort_order=0` (DB default) → midpoint `(0+0)/2=0` → drags were no-ops
+- `app/routers/todo.py`:
+  - Added `from sqlalchemy import func`
+  - `create_task` + `create_unassigned_task`: now query `max(sort_order)` in target zone and assign `max+1` to new tasks
+  - New `POST /todo/reorder` endpoint: accepts ordered `task_ids[]` + optional `moved_task_id`/`new_column_id`; assigns `sort_order=0,1,2...`; handles cross-column moves atomically
+- `frontend/src/pages/Todo.jsx`:
+  - `handleDrop` replaced: computes full new zone order locally, calls `POST /todo/reorder`
+  - Added `applyOptimisticReorder()`: updates `columns`/`unassigned` state instantly before API responds; rollback on error
+  - Result: drag response is instant (no visible delay)
+
+**Pending:** none
+
+---
+
 ## Session — 2026-03-22 (To Do — drag-and-drop + Activity View + Unassigned tasks)
 
 ### What Was Done

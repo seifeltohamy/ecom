@@ -513,6 +513,14 @@
   - `column_id: N` → reassign to column N
 - **Response:** Full board
 
+### POST /todo/reorder
+- **Auth:** Bearer (any role) + brand in JWT
+- **Body:** `{ task_ids: int[], moved_task_id?: int, new_column_id?: int }`
+  - `task_ids`: full ordered list for the target zone → assigned `sort_order=0,1,2,...`
+  - `moved_task_id` + `new_column_id`: only on cross-column moves; `new_column_id=0` unassigns
+- **Response:** Full board
+- **Note:** Preferred over PUT for all drag reorder operations
+
 ### DELETE /todo/tasks/{task_id}
 - **Auth:** Bearer (any role) + brand in JWT
 - **Response:** Full board

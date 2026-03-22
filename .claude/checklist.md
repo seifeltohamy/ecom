@@ -55,6 +55,7 @@
 - [x] To Do done checkbox — circle toggle, done tasks collapse per column (migration 0020)
 - [x] To Do drag-and-drop — drag tasks between person columns; Activity View with CSS grid per activity section; drag between cells to reassign
 - [x] To Do unassigned tasks — "Unassigned" column in Activity View; create tasks without a person; drag to assign (migration 0021)
+- [x] To Do drag sort fix — sort_order=0 bug fixed; POST /todo/reorder endpoint; optimistic UI (instant drag response)
 
 ## In Progress
 
