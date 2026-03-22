@@ -197,7 +197,7 @@ def _send_email(to_addr: str, _gmail_password: str, subject: str, html: str):
         "https://api.resend.com/emails",
         headers={"Authorization": f"Bearer {api_key}"},
         json={
-            "from":    "EcomHQ Alerts <onboarding@resend.dev>",
+            "from":    "EcomHQ Alerts <alerts@seifeltohamy.com>",
             "to":      [to_addr],
             "subject": subject,
             "html":    html,
