@@ -192,15 +192,15 @@ def _build_html(brand_name: str, rows: list, low_stock_days: int, daily_report: 
 
 # ── Email sending ──────────────────────────────────────────────────────────────
 
-class _IPv4SMTP(smtplib.SMTP):
-    """SMTP that forces IPv4 — Railway containers fail on IPv6 with ENETUNREACH."""
+class _IPv4SMTP_SSL(smtplib.SMTP_SSL):
+    """SMTP_SSL that forces IPv4 — Railway blocks IPv6 and port 587; use port 465 via IPv4."""
     def _get_socket(self, host, port, timeout):
         addrs = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
         af, socktype, proto, _, sa = addrs[0]
         sock = socket.socket(af, socktype, proto)
         sock.settimeout(timeout if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT else 30)
         sock.connect(sa)
-        return sock
+        return self.context.wrap_socket(sock, server_hostname=host)
 
 
 def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
@@ -210,9 +210,7 @@ def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
     msg["To"]      = to_addr
     msg.attach(MIMEText(html, "html"))
 
-    with _IPv4SMTP("smtp.gmail.com", 587) as smtp:
-        smtp.ehlo()
-        smtp.starttls(context=ssl.create_default_context())
+    with _IPv4SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as smtp:
         smtp.login(to_addr, gmail_password)
         smtp.sendmail(to_addr, to_addr, msg.as_string())
 
