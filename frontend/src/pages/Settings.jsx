@@ -287,7 +287,7 @@ export default function Settings() {
   async function testStockAlert() {
     setTestingStock(true);
     setMsg(null);
-    const res = await authFetch('/settings/test-stock-alert', { method: 'POST' });
+    const res = await authFetch('/settings/trigger-stock-alert', { method: 'POST' });
     setTestingStock(false);
     setMsg(res.ok
       ? { type: 'success', text: 'Test alert sent — check your email.' }
@@ -297,7 +297,7 @@ export default function Settings() {
   async function testMetaAlert() {
     setTestingMeta(true);
     setMetaMsg(null);
-    const res = await authFetch('/settings/test-meta-balance-alert', { method: 'POST' });
+    const res = await authFetch('/settings/trigger-meta-balance-alert', { method: 'POST' });
     setTestingMeta(false);
     setMetaMsg(res.ok
       ? { type: 'success', text: 'Test alert sent — check your email.' }
