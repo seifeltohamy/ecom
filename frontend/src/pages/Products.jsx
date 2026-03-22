@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { authFetch } from '../utils/auth.js';
+import { useDialog } from '../utils/useDialog.js';
 import { S } from '../styles.js';
 import Card, { CardTitle } from '../components/Card.jsx';
 import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
 import Badge from '../components/Badge.jsx';
+import Dialog from '../components/Dialog.jsx';
 
 export default function Products() {
+  const { dialogProps, confirm } = useDialog();
   const [products, setProducts] = useState({});
   const [sku,     setSku]     = useState('');
   const [name,    setName]    = useState('');
@@ -42,7 +45,7 @@ export default function Products() {
   };
 
   const del = async (s) => {
-    if (!confirm(`Remove ${s}?`)) return;
+    if (!await confirm('Remove Product', `Remove SKU "${s}"? This cannot be undone.`)) return;
     await authFetch(`/products/${encodeURIComponent(s)}`, { method: 'DELETE' });
     load();
   };
@@ -130,6 +133,7 @@ export default function Products() {
           </div>
         )}
       </Card>
+      <Dialog {...dialogProps} />
     </div>
   );
 }

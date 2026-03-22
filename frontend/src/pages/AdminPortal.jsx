@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authFetch } from '../utils/auth.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useDialog } from '../utils/useDialog.js';
 import Alert from '../components/Alert.jsx';
+import Dialog from '../components/Dialog.jsx';
 
 function fmt(n) {
   if (n == null) return '—';
@@ -19,6 +21,7 @@ const checkLabel = { display: 'flex', alignItems: 'center', gap: '.3rem', fontSi
 export default function AdminPortal() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { dialogProps, confirm } = useDialog();
 
   const [brands,      setBrands]      = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -118,7 +121,7 @@ export default function AdminPortal() {
   };
 
   const deleteAdmin = async (userId, email) => {
-    if (!confirm(`Delete admin ${email}?`)) return;
+    if (!await confirm('Delete Admin', `Delete ${email}? This cannot be undone.`)) return;
     const res = await authFetch(`/admin/admins/${userId}`, { method: 'DELETE' });
     if (res.ok) setAdmins(prev => prev.filter(a => a.id !== userId));
   };
@@ -386,6 +389,7 @@ export default function AdminPortal() {
           </div>
         )}
       </div>
+      <Dialog {...dialogProps} />
     </div>
   );
 }

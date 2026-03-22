@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { authFetch } from '../utils/auth.js';
+import { useDialog } from '../utils/useDialog.js';
 import { S } from '../styles.js';
 import Alert from '../components/Alert.jsx';
+import Dialog from '../components/Dialog.jsx';
 
 // Activity pill colour palette — cycles by activity id, CSS vars only
 const ACT_COLORS = [
@@ -90,7 +92,7 @@ function TaskModal({ task, activities, prefillActivityId, onClose, onSave, onDel
         ))}
 
         <div style={{ display: 'flex', gap: '.5rem', justifyContent: 'flex-end' }}>
-          {task && <button onClick={() => { if (window.confirm('Delete this task?')) onDelete(); }} style={{ ...S.btnBase, ...S.btnDanger, marginRight: 'auto' }}>Delete</button>}
+          {task && <button onClick={onDelete} style={{ ...S.btnBase, ...S.btnDanger, marginRight: 'auto' }}>Delete</button>}
           <button onClick={onClose} style={{ ...S.btnBase, ...S.btnOutline }}>Cancel</button>
           <button onClick={handleSave} disabled={!title.trim() || saving}
             style={{ ...S.btnBase, ...S.btnPrimary, ...((!title.trim() || saving) ? S.btnDisabled : {}) }}>
@@ -145,7 +147,7 @@ function ActivitiesPanel({ activities, onAdd, onRename, onDelete }) {
               : <>
                   <button onClick={() => { setEditId(a.id); setEditName(a.name); }} title="Rename"
                     style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '.85rem', padding: '2px 4px' }}>✎</button>
-                  <button onClick={() => { if (window.confirm(`Delete activity "${a.name}"? Tasks tagged with it will keep their data.`)) onDelete(a.id); }} title="Delete"
+                  <button onClick={() => onDelete(a.id)} title="Delete"
                     style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '.85rem', padding: '2px 4px' }}>✕</button>
                 </>}
           </div>
@@ -223,6 +225,7 @@ const InsertLine = () => (
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Todo() {
+  const { dialogProps, confirm, info } = useDialog();
   const [columns, setColumns]           = useState([]);
   const [unassigned, setUnassigned]     = useState([]);
   const [activities, setActivities]     = useState([]);
@@ -419,7 +422,7 @@ export default function Todo() {
     } catch (e) {
       setColumns(prevColumns);
       setUnassigned(prevUnassigned);
-      alert(e.message);
+      info('Error', e.message);
     }
   }
 
@@ -427,17 +430,19 @@ export default function Todo() {
 
   async function handleAddActivity(name) {
     try { loadBoard(await apiCall('/todo/activities', 'POST', { name })); }
-    catch (e) { alert(e.message); }
+    catch (e) { info('Error', e.message); }
   }
   async function handleRenameActivity(id, name) {
     try { loadBoard(await apiCall(`/todo/activities/${id}`, 'PUT', { name })); }
-    catch (e) { alert(e.message); }
+    catch (e) { info('Error', e.message); }
   }
   async function handleDeleteActivity(id) {
+    const act = activities.find(a => a.id === id);
+    if (!await confirm('Delete Activity', `Delete "${act?.name}"? Tasks tagged with it will keep their data.`)) return;
     try {
       loadBoard(await apiCall(`/todo/activities/${id}`, 'DELETE'));
       if (activeFilter === id) setActiveFilter(null);
-    } catch (e) { alert(e.message); }
+    } catch (e) { info('Error', e.message); }
   }
 
   async function handleAddCol() {
@@ -445,19 +450,19 @@ export default function Todo() {
     try {
       loadBoard(await apiCall('/todo/columns', 'POST', { name: newColName.trim() }));
       setNewColName(''); setAddingCol(false);
-    } catch (e) { alert(e.message); }
+    } catch (e) { info('Error', e.message); }
   }
   async function handleRenameCol(id) {
     if (!renameColVal.trim()) return;
     try {
       loadBoard(await apiCall(`/todo/columns/${id}`, 'PUT', { name: renameColVal.trim() }));
       setRenamingCol(null);
-    } catch (e) { alert(e.message); }
+    } catch (e) { info('Error', e.message); }
   }
   async function handleDeleteCol(id, name) {
-    if (!window.confirm(`Delete "${name}" and all their tasks?`)) return;
+    if (!await confirm('Delete Person', `Delete "${name}" and all their tasks? This cannot be undone.`)) return;
     try { loadBoard(await apiCall(`/todo/columns/${id}`, 'DELETE')); }
-    catch (e) { alert(e.message); }
+    catch (e) { info('Error', e.message); }
   }
 
   async function handleSaveTask({ title, deadline, notes, activity_id, done }) {
@@ -472,13 +477,14 @@ export default function Todo() {
         loadBoard(await apiCall(`/todo/tasks/${editTask.task.id}`, 'PUT', { title, deadline, notes, activity_id, done }));
       }
       setEditTask(null);
-    } catch (e) { alert(e.message); }
+    } catch (e) { info('Error', e.message); }
   }
   async function handleDeleteTask() {
+    if (!await confirm('Delete Task', 'Delete this task? This cannot be undone.')) return;
     try {
       loadBoard(await apiCall(`/todo/tasks/${editTask.task.id}`, 'DELETE'));
       setEditTask(null);
-    } catch (e) { alert(e.message); }
+    } catch (e) { info('Error', e.message); }
   }
   async function handleToggleDone(task) {
     try {
@@ -486,7 +492,7 @@ export default function Todo() {
         title: task.title, deadline: task.deadline, notes: task.notes,
         activity_id: task.activity_id, done: !task.done,
       }));
-    } catch (e) { alert(e.message); }
+    } catch (e) { info('Error', e.message); }
   }
 
   if (loading) return <Alert type="loading">Loading board…</Alert>;
@@ -777,6 +783,7 @@ export default function Todo() {
           onDelete={handleDeleteTask}
         />
       )}
+      <Dialog {...dialogProps} />
     </div>
   );
 }

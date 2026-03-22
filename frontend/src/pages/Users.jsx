@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { authFetch } from '../utils/auth.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useDialog } from '../utils/useDialog.js';
 import { PERMISSIONED_PAGES } from '../App.jsx';
 import Card, { CardTitle } from '../components/Card.jsx';
 import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
+import Dialog from '../components/Dialog.jsx';
 
 export default function Users() {
   const { currentUserEmail } = useAuth();
+  const { dialogProps, confirm } = useDialog();
   const [users,    setUsers]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [name,     setName]     = useState('');
@@ -97,7 +100,7 @@ export default function Users() {
   };
 
   const del = async (id, userEmail) => {
-    if (!confirm(`Delete user ${userEmail}?`)) return;
+    if (!await confirm('Delete User', `Delete ${userEmail}? This cannot be undone.`)) return;
     const res = await authFetch(`/users/${id}`, { method: 'DELETE' });
     if (!res.ok) {
       const data = await res.json();
@@ -296,6 +299,7 @@ export default function Users() {
             )
         }
       </Card>
+      <Dialog {...dialogProps} />
     </div>
   );
 }

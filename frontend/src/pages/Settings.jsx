@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { authFetch } from '../utils/auth.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useDialog } from '../utils/useDialog.js';
 import Card, { CardTitle } from '../components/Card.jsx';
 import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
+import Dialog from '../components/Dialog.jsx';
 
 const inputStyle = {
   flex: 1,
@@ -48,6 +50,7 @@ function TimePicker({ value, onChange, disabled }) {
 
 export default function Settings() {
   const { brandName } = useAuth();
+  const { dialogProps, confirm } = useDialog();
 
   // Bosta credentials
   const [apiKey,              setApiKey]              = useState('');
@@ -175,7 +178,7 @@ export default function Settings() {
   }
 
   async function disconnectMeta() {
-    if (!window.confirm('Disconnect Meta Ads? Spend data will no longer appear.')) return;
+    if (!await confirm('Disconnect Meta Ads', 'Spend data will no longer appear on the dashboard.')) return;
     setDisconnectingMeta(true);
     setMetaMsg(null);
     const res = await authFetch('/meta/disconnect', { method: 'DELETE' });
@@ -668,6 +671,7 @@ export default function Settings() {
           </ol>
         </details>
       </Card>
+      <Dialog {...dialogProps} />
     </div>
   );
 }

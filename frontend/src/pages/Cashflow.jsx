@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authFetch } from '../utils/auth.js';
+import { useDialog } from '../utils/useDialog.js';
 import { fmt } from '../utils/format.js';
 import { S } from '../styles.js';
 import Card, { CardTitle } from '../components/Card.jsx';
 import Btn from '../components/Btn.jsx';
 import Alert from '../components/Alert.jsx';
+import Dialog from '../components/Dialog.jsx';
 
 export default function Cashflow() {
   const navigate = useNavigate();
@@ -34,7 +36,7 @@ export default function Cashflow() {
   const [acceptingId,      setAcceptingId]     = useState(null);
   const [acceptForm,       setAcceptForm]      = useState({ month: '', category: '', notes: '', amount: '' });
   const [checkingPayouts,  setCheckingPayouts] = useState(false);
-  const [infoModal,        setInfoModal]       = useState(null); // { title, body }
+  const { dialogProps, confirm, info } = useDialog();
 
   const loadMonths = useCallback(async () => {
     try {
@@ -73,7 +75,7 @@ export default function Cashflow() {
   }, []);
 
   const dismissSuggestion = async (id) => {
-    if (!window.confirm('Dismiss this suggestion? It will be hidden but kept in records.')) return;
+    if (!await confirm('Dismiss Suggestion', 'It will be hidden but kept in records.')) return;
     setSuggestions(s => s.filter(x => x.id !== id));
     await authFetch(`/cashflow/sms-suggestions/${id}/dismiss`, { method: 'POST' });
   };
@@ -89,7 +91,7 @@ export default function Cashflow() {
       const res  = await authFetch('/sms/check-bosta-payouts', { method: 'POST' });
       const data = await res.json();
       if (data.error) {
-        setInfoModal({ title: 'Check Failed', body: data.error });
+        info('Check Failed', data.error);
       } else if (data.new > 0) {
         const updated = await authFetch('/cashflow/sms-suggestions').then(r => r.json());
         if (Array.isArray(updated)) { setSuggestions(updated); setShowSuggestions(true); }
@@ -99,10 +101,10 @@ export default function Cashflow() {
         const detail = data.emails_found > 0 && matched === 0
           ? `${data.emails_found} email${data.emails_found !== 1 ? 's' : ''} from no-reply@bosta.co found but none had a "Cashout" subject.`
           : `${data.emails_found} Bosta email${data.emails_found !== 1 ? 's' : ''} from the last ${days} day${days !== 1 ? 's' : ''} — none were new Cashout receipts.`;
-        setInfoModal({ title: 'No New Payouts', body: detail });
+        info('No New Payouts', detail);
       }
     } catch (e) {
-      setInfoModal({ title: 'Error', body: e.message });
+      info('Error', e.message);
     } finally {
       setCheckingPayouts(false);
     }
@@ -533,18 +535,7 @@ export default function Cashflow() {
         </div>
       )}
 
-      {/* ── Info Modal ── */}
-      {infoModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 'var(--radius)', padding: '1.75rem', maxWidth: 420, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,.4)' }}>
-            <h3 style={{ margin: '0 0 .75rem', color: 'var(--text)', fontSize: '1.05rem' }}>{infoModal.title}</h3>
-            <p style={{ margin: '0 0 1.25rem', color: 'var(--muted)', fontSize: '.9rem', lineHeight: 1.5 }}>{infoModal.body}</p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Btn onClick={() => setInfoModal(null)}>OK</Btn>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog {...dialogProps} />
     </div>
   );
 }
