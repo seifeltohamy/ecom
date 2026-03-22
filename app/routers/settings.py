@@ -194,11 +194,14 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
 
 
 @router.post("/settings/trigger-stock-alert")
-def trigger_stock_alert(_admin: models.User = Depends(require_admin)):
-    """Manually fire the stock alert job right now (admin only). Runs synchronously and returns results."""
+def trigger_stock_alert(
+    brand_id: int = Depends(get_brand_id),
+    _admin: models.User = Depends(require_admin),
+):
+    """Manually fire the stock alert job for the current brand only."""
     from app.stock_alert import run_stock_alert_job
     try:
-        results = run_stock_alert_job(force=True)
+        results = run_stock_alert_job(force=True, brand_id_filter=brand_id)
         sent    = [r for r in results if r["status"] == "sent"]
         errors  = [r for r in results if r["status"] == "error"]
         skipped = [r for r in results if r["status"] == "skipped"]
@@ -208,11 +211,14 @@ def trigger_stock_alert(_admin: models.User = Depends(require_admin)):
 
 
 @router.post("/settings/trigger-meta-balance-alert")
-def trigger_meta_balance_alert(_admin: models.User = Depends(require_admin)):
-    """Manually fire the Meta Ads balance alert job right now (admin only). Runs synchronously and returns results."""
+def trigger_meta_balance_alert(
+    brand_id: int = Depends(get_brand_id),
+    _admin: models.User = Depends(require_admin),
+):
+    """Manually fire the Meta Ads balance alert for the current brand only."""
     from app.meta_balance_alert import run_meta_balance_alert_job
     try:
-        run_meta_balance_alert_job(force=True)
+        run_meta_balance_alert_job(force=True, brand_id_filter=brand_id)
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(500, str(exc))

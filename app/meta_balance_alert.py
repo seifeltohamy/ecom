@@ -53,11 +53,13 @@ def _build_balance_alert_html(brand_name: str, balance: float, threshold: float,
 </html>"""
 
 
-def run_meta_balance_alert_job(force: bool = False):
-    """Check Meta Ads balance for all brands and send alert if below threshold."""
-    logger.info("Meta balance alert job running (force=%s)", force)
+def run_meta_balance_alert_job(force: bool = False, brand_id_filter: int | None = None):
+    """Check Meta Ads balance for all brands (or one brand) and send alert if below threshold."""
+    logger.info("Meta balance alert job running (force=%s, brand_filter=%s)", force, brand_id_filter)
 
     brands = _get_all_brands()
+    if brand_id_filter is not None:
+        brands = [b for b in brands if b["brand_id"] == brand_id_filter]
     for brand in brands:
         brand_id   = brand["brand_id"]
         brand_name = brand["brand_name"]

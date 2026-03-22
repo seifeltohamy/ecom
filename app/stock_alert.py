@@ -6,10 +6,8 @@ Each brand configures its own alert times and threshold via Settings.
 
 import json
 import logging
-import smtplib
+import os
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 import httpx
 
@@ -190,29 +188,36 @@ def _build_html(brand_name: str, rows: list, low_stock_days: int, daily_report: 
 
 # ── Email sending ──────────────────────────────────────────────────────────────
 
-def _send_email(to_addr: str, gmail_password: str, subject: str, html: str):
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = to_addr
-    msg["To"]      = to_addr
-    msg.attach(MIMEText(html, "html"))
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(to_addr, gmail_password)
-        smtp.sendmail(to_addr, to_addr, msg.as_string())
+def _send_email(to_addr: str, _gmail_password: str, subject: str, html: str):
+    """Send email via Resend HTTPS API (RESEND_API_KEY env var required).
+    Railway blocks outbound SMTP so we use HTTP instead."""
+    api_key = os.getenv("RESEND_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY env var not set — add it in Railway Variables")
+    r = httpx.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={"from": "EcomHQ <alerts@ecomhq.app>", "to": [to_addr], "subject": subject, "html": html},
+        timeout=15,
+    )
+    if r.status_code not in (200, 201):
+        raise RuntimeError(f"Resend API error {r.status_code}: {r.text}")
 
 
 # ── Main job ───────────────────────────────────────────────────────────────────
 
-def run_stock_alert_job(force: bool = False) -> list[dict]:
+def run_stock_alert_job(force: bool = False, brand_id_filter: int | None = None) -> list[dict]:
     """Called by APScheduler every hour on the hour. Each brand's configured times gate sending.
     Pass force=True to bypass the time gate (used by manual trigger endpoint).
+    Pass brand_id_filter to restrict to a single brand.
     Returns a list of per-brand result dicts."""
     now_hm = datetime.now(tz=timezone.utc).strftime("%H:%M")
-    logger.info("Stock alert job running at %s UTC (force=%s)", now_hm, force)
+    logger.info("Stock alert job running at %s UTC (force=%s, brand_filter=%s)", now_hm, force, brand_id_filter)
 
     results = []
     brands = _get_all_brands()
+    if brand_id_filter is not None:
+        brands = [b for b in brands if b["brand_id"] == brand_id_filter]
     for brand in brands:
         brand_id   = brand["brand_id"]
         brand_name = brand["brand_name"]
