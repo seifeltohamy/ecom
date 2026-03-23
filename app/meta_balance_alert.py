@@ -8,10 +8,7 @@ until the balance recovers above the threshold.
 """
 
 import logging
-import smtplib
 from datetime import datetime, timezone
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from app.stock_alert import _get_all_brands, _get_brand_settings, _send_email
 from app.meta_client import compute_meta_balance
@@ -67,14 +64,14 @@ def run_meta_balance_alert_job(force: bool = False, brand_id_filter: int | None 
             settings   = _get_brand_settings(brand_id)
             token      = settings.get("meta_access_token", "")
             account_id = settings.get("meta_ad_account_id", "")
-            email      = settings.get("bosta_email", "")
-            password   = settings.get("bosta_email_password", "")
+            email    = settings.get("bosta_email", "")
+            password = settings.get("bosta_email_password", "")
 
             if not token or not account_id:
                 logger.debug("Brand %s (%s): Meta not connected, skipping", brand_id, brand_name)
                 continue
-            if not email or not password:
-                logger.debug("Brand %s (%s): no email credentials, skipping", brand_id, brand_name)
+            if not email:
+                logger.debug("Brand %s (%s): no recipient email configured, skipping", brand_id, brand_name)
                 continue
 
             try:
