@@ -3,6 +3,63 @@
 
 ---
 
+## Session — 2026-03-23 (Production scaling + Email alerts + CIB SMS keywords)
+
+### What Was Done
+
+**CIB SMS keywords expanded:**
+- `app/routers/sms.py`: added `"المنتهي بـ ********4707"` (account ending 4707) and two card 2297 formats: `"# **2297"` + `"**2297 #"`
+
+**Production scaling (Railway Hobby plan upgraded):**
+- `start_prod.sh`: added `--workers 2` to uvicorn
+- `main.py`: APScheduler now uses file lock (`/tmp/ecomhq_scheduler.lock`) via `fcntl.flock` — only one worker starts the scheduler; others skip silently with log message
+- `run_stock_alert_job` + `run_meta_balance_alert_job`: accept `brand_id_filter` param — trigger endpoints now scope to current brand only
+
+**Settings page — Send Test Alert buttons:**
+- `frontend/src/pages/Settings.jsx`: "Send Test Alert" button in Stock Alert card; "Test" button in Meta Ads balance threshold row
+- Both call synchronous endpoints that return real result details (sent/skipped/error with reasons)
+- `app/routers/settings.py`: `trigger-stock-alert` + `trigger-meta-balance-alert` now run synchronously, return per-brand results; scoped to current `brand_id`
+- `app/stock_alert.py`: `run_stock_alert_job` returns `list[dict]` with per-brand status
+
+**Email sending — switched from SMTP to Resend HTTPS API:**
+- Railway blocks all outbound SMTP (ports 587 + 465 both time out)
+- `app/stock_alert.py`: `_send_email` now POSTs to `api.resend.com/emails` using `RESEND_API_KEY` env var
+- Sender: `alerts@seifeltohamy.com` (domain verified on Resend via Namecheap DNS records)
+- `RESEND_API_KEY` must be set in Railway Variables
+
+**EGP exchange rate fix:**
+- `app/meta_client.py`: replaced `frankfurter.app` (returned 404 for EGP) with `open.er-api.com` — working correctly
+
+**Pending:**
+- Resend domain `seifeltohamy.com` DNS still propagating (status: Pending as of 2:32 AM) — verify in Resend after propagation completes
+- Add `RESEND_API_KEY` to Railway Variables then test "Send Test Alert"
+
+---
+
+## Session — 2026-03-22 (Bosta payout fixes + Dialog system + Master Wallet)
+
+### What Was Done
+
+**Bosta payout configurable lookback:**
+- `app/routers/settings.py`: added `bosta_payout_days` to `SettingsUpdate`, `GET /settings`, `PUT /settings`
+- `app/bosta_payout.py`: reads `settings.get('bosta_payout_days')` (default 2); returns `payout_days` in response; searches `[Gmail]/All Mail` instead of `inbox` (Bosta emails land in Promotions); dismissed suggestions now reset to `pending` on re-check (dedup only skips pending/accepted)
+- `frontend/src/pages/Settings.jsx`: numeric input "Payout email lookback" in Bosta card
+
+**Styled Dialog system (replaces all native alert/confirm):**
+- `frontend/src/components/Dialog.jsx`: new branded modal (dark overlay, `var(--surface)` card, Btn buttons)
+- `frontend/src/utils/useDialog.js`: `useDialog()` hook — `info(title, body)` + `confirm(title, body)` as promises
+- Replaced all `window.alert()` / `window.confirm()` / `alert()` / `confirm()` across: Cashflow, Todo, Products, Settings, Users, AdminPortal
+
+**Master Wallet (migration 0022):**
+- `alembic/versions/0022_wallet_entries.py`: new `wallet_entries` table
+- `app/models.py`: `WalletEntry` model (`brand_id`, `month_name`, `month_net`, `balance_after`, `created_at`)
+- `app/routers/cashflow.py`: `POST /cashflow/months` snapshots previous month's net into `wallet_entries`; new `GET /cashflow/wallet` endpoint (before `/{month}` to avoid route shadowing)
+- `frontend/src/pages/Cashflow.jsx`: 4th summary card "Master Wallet" with orange top border; "View history →" (hidden when no history); wallet history modal (Month / Net / Balance After table)
+
+**Pending:** none
+
+---
+
 ## Session — 2026-03-22 (To Do — drag sort fix + instant drag performance)
 
 ### What Was Done

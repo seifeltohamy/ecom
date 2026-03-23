@@ -56,6 +56,15 @@
 - [x] To Do drag-and-drop — drag tasks between person columns; Activity View with CSS grid per activity section; drag between cells to reassign
 - [x] To Do unassigned tasks — "Unassigned" column in Activity View; create tasks without a person; drag to assign (migration 0021)
 - [x] To Do drag sort fix — sort_order=0 bug fixed; POST /todo/reorder endpoint; optimistic UI (instant drag response)
+- [x] Bosta payout lookback configurable — `bosta_payout_days` setting in Settings page; default 2 days
+- [x] Bosta payout IMAP fix — search [Gmail]/All Mail (was inbox, missed Promotions tab)
+- [x] Bosta payout dismissed re-surface — dismissed suggestions reset to pending on re-check instead of being blocked by dedup forever
+- [x] Dialog system — `Dialog` component + `useDialog` hook; replaces all native alert/confirm across 6 pages
+- [x] Master Wallet — migration 0022; wallet_entries table; POST /cashflow/months snapshots prev month net; GET /cashflow/wallet; 4th card on Cashflow page with history modal
+- [x] Production scaling — Railway Hobby; --workers 2; APScheduler file lock (one worker only); trigger endpoints scoped to current brand
+- [x] Email alerts via Resend — Railway blocks SMTP; switched to Resend HTTPS API; sender alerts@seifeltohamy.com; Send Test Alert buttons in Settings
+- [x] CIB SMS keywords — added account 4707 + card 2297 formats (# **2297 and **2297 #)
+- [x] EGP exchange rate — fixed frankfurter.app (404) → open.er-api.com
 
 ## In Progress
 

@@ -114,8 +114,9 @@ import { S } from '../styles.js';
 | `frontend/src/components/ReportHistory.jsx` | Bosta report history card |
 
 ## Current State
-App fully working. Deployed on Railway at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-22): To Do board complete — Kanban/Activity View drag-and-drop, unassigned tasks, sort fix (POST /todo/reorder), optimistic UI. Migrations 0019–0021. All code pushed (8fc7388).
-Env vars required in Railway: `GEMINI_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `VITE_META_APP_ID` (build var).
+App fully working. Deployed on Railway Hobby plan at `ecom-production-a643.up.railway.app`.
+Last session (2026-03-23): Production scaling (--workers 2, APScheduler file lock); email alerts switched to Resend HTTPS API (Railway blocks SMTP); Send Test Alert buttons in Settings; CIB SMS keywords expanded. All code pushed (2d4dfd5).
+Env vars required in Railway: `GEMINI_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `VITE_META_APP_ID` (build var), `RESEND_API_KEY`.
 Facebook App must whitelist `ecom-production-a643.up.railway.app` in App Domains + OAuth redirect URIs.
-Pending: password change, cashflow CSV export, iOS Shortcut empty body fix.
+Resend domain `seifeltohamy.com` DNS propagating — verify in Resend dashboard before testing alerts.
+Pending: password change, cashflow CSV export, iOS Shortcut empty body fix, verify Resend domain + test stock alert email.
