@@ -26,8 +26,31 @@ router = APIRouter()
 PROJECT_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR / "automation"))
 
-# file_id → {path, tmp, brand_id, date_from, date_to}
-pending_exports: dict = {}
+# Export sessions stored on disk so all uvicorn workers can share them.
+# Each session: /tmp/ecomhq_export_<file_id>.json
+
+def _export_meta_path(fid: str) -> str:
+    return f"/tmp/ecomhq_export_{fid}.json"
+
+def _save_export(fid: str, info: dict) -> None:
+    with open(_export_meta_path(fid), "w") as f:
+        json.dump(info, f)
+
+def _load_export(fid: str) -> dict | None:
+    p = _export_meta_path(fid)
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def _delete_export(fid: str) -> None:
+    try:
+        os.remove(_export_meta_path(fid))
+    except FileNotFoundError:
+        pass
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -406,10 +429,10 @@ def run_export_sse(
             q.put("LOG:File downloaded — sorting rows…")
             out, date_from, date_to = bd.sort_only(path)
             fid = str(uuid.uuid4())
-            pending_exports[fid] = {
+            _save_export(fid, {
                 "path": out, "tmp": tmp, "brand_id": brand_id,
                 "date_from": date_from, "date_to": date_to,
-            }
+            })
             q.put(f"READY:{fid}:{date_from}:{date_to}")
         except Exception as e:
             q.put(f"ERROR:{e}")
@@ -443,11 +466,12 @@ async def automation_upload(
     _user:    models.User = Depends(require_writable),
     brand_id: int = Depends(get_brand_id),
 ):
-    info = pending_exports.pop(file_id, None)
+    info = _load_export(file_id)
     if not info:
         raise HTTPException(404, "Export session expired or not found")
     if info["brand_id"] != brand_id:
         raise HTTPException(403, "Brand mismatch")
+    _delete_export(file_id)
     try:
         with open(info["path"], "rb") as f:
             contents = f.read()
