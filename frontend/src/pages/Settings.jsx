@@ -629,50 +629,49 @@ export default function Settings() {
             {/* Balance alert threshold */}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
               <label style={labelStyle}>Balance Alert Threshold</label>
-              <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <span style={{
-                    position: 'absolute', left: '.75rem', top: '50%', transform: 'translateY(-50%)',
-                    fontSize: '.8rem', color: 'var(--muted)', pointerEvents: 'none',
-                  }}>EGP</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={metaBalanceThreshold}
-                    onChange={e => setMetaBalanceThreshold(e.target.value)}
-                    style={{ ...inputStyle, paddingLeft: '2.75rem', width: '100%' }}
-                  />
-                </div>
-                <Btn onClick={saveMetaThreshold} disabled={savingMetaThreshold}>
-                  {savingMetaThreshold ? 'Saving…' : 'Save'}
-                </Btn>
-                <Btn variant="outline" onClick={testMetaAlert} disabled={testingMeta}>
-                  {testingMeta ? 'Sending…' : 'Test'}
-                </Btn>
+              <div style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute', left: '.75rem', top: '50%', transform: 'translateY(-50%)',
+                  fontSize: '.8rem', color: 'var(--muted)', pointerEvents: 'none',
+                }}>EGP</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={metaBalanceThreshold}
+                  onChange={e => setMetaBalanceThreshold(e.target.value)}
+                  style={{ ...inputStyle, paddingLeft: '2.75rem', width: '100%', boxSizing: 'border-box' }}
+                />
               </div>
               <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.4rem' }}>
                 An email alert is sent every 10 minutes when your Meta Ads balance drops below this amount.
               </p>
 
               <label style={{ ...labelStyle, marginTop: '1rem' }}>Meta Opening Balance</label>
-              <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <span style={{
-                    position: 'absolute', left: '.75rem', top: '50%', transform: 'translateY(-50%)',
-                    fontSize: '.8rem', color: 'var(--muted)', pointerEvents: 'none',
-                  }}>EGP</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={metaCarriedBalance}
-                    onChange={e => setMetaCarriedBalance(e.target.value)}
-                    style={{ ...inputStyle, paddingLeft: '2.75rem', width: '100%' }}
-                  />
-                </div>
+              <div style={{ position: 'relative' }}>
+                <span style={{
+                  position: 'absolute', left: '.75rem', top: '50%', transform: 'translateY(-50%)',
+                  fontSize: '.8rem', color: 'var(--muted)', pointerEvents: 'none',
+                }}>EGP</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={metaCarriedBalance}
+                  onChange={e => setMetaCarriedBalance(e.target.value)}
+                  style={{ ...inputStyle, paddingLeft: '2.75rem', width: '100%', boxSizing: 'border-box' }}
+                />
               </div>
               <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.4rem' }}>
-                The balance already in your Meta wallet before you started tracking deposits here. Saved with the threshold above.
+                The balance already in your Meta wallet before you started tracking deposits here.
               </p>
+
+              <div style={{ display: 'flex', gap: '.75rem', marginTop: '1.25rem' }}>
+                <Btn onClick={saveMetaThreshold} disabled={savingMetaThreshold}>
+                  {savingMetaThreshold ? 'Saving…' : 'Save Meta Settings'}
+                </Btn>
+                <Btn variant="outline" onClick={testMetaAlert} disabled={testingMeta}>
+                  {testingMeta ? 'Sending…' : 'Test Alert'}
+                </Btn>
+              </div>
             </div>
           </div>
         )}
