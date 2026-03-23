@@ -176,7 +176,7 @@ def meta_summary(
 
     try:
         spend_data   = meta_client.get_spend_summary(token, account_id, date_from, date_to)
-        balance_data = meta_client.get_account_balance(token, account_id)
+        balance_data = meta_client.compute_meta_balance(brand_id)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Meta API error: {str(e)}")
 

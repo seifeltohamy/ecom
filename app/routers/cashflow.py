@@ -53,6 +53,19 @@ def add_cashflow_month(payload: schemas.CashflowMonthIn, brand_id: int = Depends
 
             db.add(models.CashflowMonth(name=month, brand_id=brand_id))
             db.commit()
+
+            # Carry Meta Ads remaining balance forward to the new month
+            from app.meta_client import compute_meta_balance
+            meta_bal = compute_meta_balance(brand_id)
+            setting = db.query(models.AppSettings).filter(
+                models.AppSettings.brand_id == brand_id,
+                models.AppSettings.key == "meta_carried_balance",
+            ).first()
+            if setting:
+                setting.value = str(meta_bal["balance"])
+            else:
+                db.add(models.AppSettings(brand_id=brand_id, key="meta_carried_balance", value=str(meta_bal["balance"])))
+            db.commit()
         months = db.query(models.CashflowMonth).filter(
             models.CashflowMonth.brand_id == brand_id
         ).order_by(models.CashflowMonth.created_at).all()

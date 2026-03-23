@@ -107,6 +107,49 @@ def _usd_to_egp_rate() -> float:
         return 50.0   # fallback if API is unreachable
 
 
+def compute_meta_balance(brand_id: int) -> dict:
+    """Compute remaining Meta Ads balance from cashflow data (not Meta API).
+
+    Formula: carried_from_prev_month + Ads money-out (this month) - Meta spend (this month)
+    """
+    from app.deps import get_db
+    from app import models
+
+    with get_db() as db:
+        settings = {r.key: r.value for r in db.query(models.AppSettings).filter(
+            models.AppSettings.brand_id == brand_id).all()}
+
+        carried = float(settings.get("meta_carried_balance", "0") or "0")
+
+        current_month = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.brand_id == brand_id
+        ).order_by(models.CashflowMonth.id.desc()).first()
+
+        ads_deposited = 0.0
+        if current_month:
+            entries = db.query(models.CashflowEntry).filter(
+                models.CashflowEntry.month_id == current_month.id,
+                models.CashflowEntry.type == "out",
+                models.CashflowEntry.category == "Ads",
+            ).all()
+            ads_deposited = sum(e.amount for e in entries)
+
+    token      = settings.get("meta_access_token", "")
+    account_id = settings.get("meta_ad_account_id", "")
+    meta_spend = 0.0
+    if token and account_id:
+        from datetime import datetime, timezone
+        today     = datetime.now(timezone.utc)
+        date_from = today.replace(day=1).strftime("%Y-%m-%d")
+        date_to   = today.strftime("%Y-%m-%d")
+        try:
+            meta_spend = get_spend_summary(token, account_id, date_from, date_to)["spend"]
+        except Exception:
+            pass
+
+    return {"balance": round(carried + ads_deposited - meta_spend, 2), "currency": "EGP"}
+
+
 def get_account_balance(access_token: str, ad_account_id: str) -> dict:
     """Return {balance, currency} in EGP.
 

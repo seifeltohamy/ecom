@@ -14,7 +14,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from app.stock_alert import _get_all_brands, _get_brand_settings, _send_email
-from app.meta_client import get_account_balance
+from app.meta_client import compute_meta_balance
 
 logger = logging.getLogger("meta_balance_alert")
 
@@ -82,7 +82,7 @@ def run_meta_balance_alert_job(force: bool = False, brand_id_filter: int | None 
             except (ValueError, TypeError):
                 threshold = 5000.0
 
-            balance_data = get_account_balance(token, account_id)
+            balance_data = compute_meta_balance(brand_id)
             balance      = balance_data["balance"]
             currency     = balance_data.get("currency", "EGP")
 
