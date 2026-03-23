@@ -215,6 +215,20 @@ db.query(models.AppSettings).filter(
 
 ---
 
+### `wallet_entries` *(added migration 0022)*
+| Column | Type | Constraints |
+|--------|------|-------------|
+| id | Integer | PK, autoincrement |
+| brand_id | Integer | FK → brands.id CASCADE, not null |
+| month_name | String(64) | not null — e.g. "Mar 2026" |
+| month_net | Float | not null — Total In − Total Out for that month |
+| balance_after | Float | not null — cumulative wallet balance after this entry |
+| created_at | DateTime | not null, default=utcnow |
+
+**Note:** One row is inserted per closed month (when the next month is created). Balance is cumulative. Query latest `balance_after` for current wallet total.
+
+---
+
 ## Migrations
 
 | Revision | File | Description |
@@ -240,6 +254,7 @@ db.query(models.AppSettings).filter(
 | 0019_todo_board | alembic/versions/0019_todo_board.py | todo_activities, todo_columns, todo_tasks tables (brand-scoped Kanban board with activity tagging) |
 | 0020_todo_task_done | alembic/versions/0020_todo_task_done.py | todo_tasks.done Boolean NOT NULL DEFAULT false |
 | 0021_unassigned_tasks | alembic/versions/0021_unassigned_tasks.py | todo_tasks.column_id made nullable (NULL = unassigned task, not yet assigned to a person) |
+| 0022_wallet_entries | alembic/versions/0022_wallet_entries.py | wallet_entries table (brand_id, month_name, month_net, balance_after, created_at) — master wallet cross-month cumulative balance |
 
 **Run migrations (from project root with .env set):**
 ```bash

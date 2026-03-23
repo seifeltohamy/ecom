@@ -133,6 +133,12 @@
 - **Auth:** Bearer (any role) + brand in JWT
 - **Body:** JSON — `{ month: string }`
 - **Response:** `{ ok, months: string[] }`
+- **Side effect:** If month is new, snapshots previous month's net into `wallet_entries`
+
+### GET /cashflow/wallet
+- **Auth:** Bearer (any role) + brand in JWT
+- **Response:** `{ balance: float, history: [{ month_name, month_net, balance_after, created_at }] }` — newest first
+- **Note:** Registered before `GET /cashflow/{month}` to avoid route shadowing
 
 ### GET /cashflow/{month}
 - **Auth:** Bearer (any role) + brand in JWT
@@ -376,7 +382,8 @@
 
 ### POST /sms/check-bosta-payouts
 - **Auth:** Bearer + require_admin + brand in JWT
-- **Behavior:** Connects to Gmail IMAP, searches `FROM no-reply@bosta.co SUBJECT "Cashout"` last 2 days; parses amount (Arabic-Indic numerals) + invoice number; creates `type='in'`, `category='Bosta'` suggestions; dedup by invoice ref_number
+- **Behavior:** Connects to Gmail IMAP (`[Gmail]/All Mail`), searches `FROM no-reply@bosta.co` since `bosta_payout_days` days ago (default 2, configurable in Settings); filters by "Cashout" subject; parses amount (Arabic-Indic numerals) + invoice number; creates `type='in'`, `category='Bosta'` suggestions; dedup skips pending/accepted only — dismissed suggestions are reset to pending
+- **Response:** `{ emails_found, subject_matched, new, error, payout_days }`
 - **Response:** `{ ok: true, emails_found: int, new: int, error: string|null }`
 
 ### GET /cashflow/sms-suggestions

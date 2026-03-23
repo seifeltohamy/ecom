@@ -105,10 +105,6 @@ export default function Home() {
     <div>
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '.75rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>Dashboard</h1>
-          <p style={{ color: 'var(--muted)', fontSize: '.85rem', margin: '.2rem 0 0' }}>Overview of your financial activity.</p>
-        </div>
         <select
           value={selectedMonth}
           onChange={e => setSelectedMonth(e.target.value)}
