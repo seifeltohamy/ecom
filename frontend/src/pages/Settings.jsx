@@ -88,6 +88,7 @@ export default function Settings() {
   const [metaMsg,              setMetaMsg]               = useState(null);
   const [fbReady,              setFbReady]               = useState(false);
   const [metaBalanceThreshold, setMetaBalanceThreshold]  = useState('5000');
+  const [metaCarriedBalance,   setMetaCarriedBalance]    = useState('0');
   const [savingMetaThreshold,  setSavingMetaThreshold]   = useState(false);
 
   // SMS integration
@@ -132,6 +133,7 @@ export default function Settings() {
         setMetaAdAccountId(d.meta_ad_account_id || '');
         setSelectedAccount(d.meta_ad_account_id || '');
         setMetaBalanceThreshold(d.meta_balance_threshold || '5000');
+        setMetaCarriedBalance(d.meta_carried_balance || '0');
       })
       .catch(() => {});
   }, []);
@@ -201,7 +203,7 @@ export default function Settings() {
     const res = await authFetch('/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ meta_balance_threshold: metaBalanceThreshold }),
+      body: JSON.stringify({ meta_balance_threshold: metaBalanceThreshold, meta_carried_balance: metaCarriedBalance }),
     });
     setSavingMetaThreshold(false);
     setMetaMsg(res.ok
@@ -650,6 +652,26 @@ export default function Settings() {
               </div>
               <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.4rem' }}>
                 An email alert is sent every 10 minutes when your Meta Ads balance drops below this amount.
+              </p>
+
+              <label style={{ ...labelStyle, marginTop: '1rem' }}>Meta Opening Balance</label>
+              <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <span style={{
+                    position: 'absolute', left: '.75rem', top: '50%', transform: 'translateY(-50%)',
+                    fontSize: '.8rem', color: 'var(--muted)', pointerEvents: 'none',
+                  }}>EGP</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={metaCarriedBalance}
+                    onChange={e => setMetaCarriedBalance(e.target.value)}
+                    style={{ ...inputStyle, paddingLeft: '2.75rem', width: '100%' }}
+                  />
+                </div>
+              </div>
+              <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.4rem' }}>
+                The balance already in your Meta wallet before you started tracking deposits here. Saved with the threshold above.
               </p>
             </div>
           </div>
