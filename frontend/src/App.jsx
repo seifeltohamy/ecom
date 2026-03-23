@@ -81,6 +81,7 @@ function Layout() {
   const location = useLocation();
   const meta = pageMeta[location.pathname] || { title: '', subtitle: '' };
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const close = () => setMenuOpen(false);
 
   // Returns true if the current user can see a page path
@@ -133,7 +134,7 @@ function Layout() {
       <div className={`zen-overlay${menuOpen ? ' open' : ''}`} onClick={close} />
 
       {/* Sidebar */}
-      <aside className={`zen-sidebar${menuOpen ? ' open' : ''}`}>
+      <aside className={`zen-sidebar${menuOpen ? ' open' : ''}${!sidebarOpen ? ' collapsed' : ''}`}>
         <div style={S.brand}>
           <div style={S.logo}>{currentUserName ? currentUserName[0].toUpperCase() : 'H'}</div>
           <div style={{ minWidth: 0 }}>
@@ -189,9 +190,19 @@ function Layout() {
       {/* Main content */}
       <main className="zen-main">
         <header style={S.header}>
-          <div>
-            <h1 style={S.h1}>{meta.title}</h1>
-            <p style={S.sub}>{meta.subtitle}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+            <button
+              onClick={() => setSidebarOpen(o => !o)}
+              className="zen-sidebar-toggle"
+              aria-label="Toggle sidebar"
+              title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? '◀' : '▶'}
+            </button>
+            <div>
+              <h1 style={S.h1}>{meta.title}</h1>
+              <p style={S.sub}>{meta.subtitle}</p>
+            </div>
           </div>
         </header>
         <Outlet />

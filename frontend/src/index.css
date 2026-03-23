@@ -47,10 +47,26 @@ body {
   padding: 1.5rem 1.25rem;
   position: sticky; top: 0; height: 100vh;
   display: flex; flex-direction: column; gap: 1.25rem;
-  overflow-y: auto;
-  transition: transform .25s ease;
+  overflow-y: auto; overflow-x: hidden;
+  transition: width .25s ease, padding .25s ease, transform .25s ease;
   z-index: 200;
 }
+
+.zen-sidebar.collapsed {
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.zen-sidebar-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex-shrink: 0;
+  background: none; border: 1px solid var(--border2);
+  border-radius: var(--radius-sm); color: var(--muted);
+  font-size: .7rem; cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.zen-sidebar-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
 .zen-topbar { display: none; }
 
@@ -137,12 +153,15 @@ body {
   .zen-sidebar {
     position: fixed; top: 0; left: 0; bottom: 0;
     height: 100dvh;
+    width: 250px !important; padding: 1.5rem 1.25rem !important;
+    overflow-y: auto !important; overflow-x: hidden !important;
     transform: translateX(-100%);
   }
   .zen-sidebar.open {
     transform: translateX(0);
     box-shadow: 8px 0 32px rgba(0,0,0,.6);
   }
+  .zen-sidebar-toggle { display: none; }
 
   .zen-main { padding: 1rem 1rem 2rem; }
 
