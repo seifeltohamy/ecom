@@ -115,7 +115,7 @@ import { S } from '../styles.js';
 
 ## Current State
 App fully working. Deployed on Railway Hobby plan at `ecom-production-a643.up.railway.app`.
-Last session (2026-03-23): Production scaling (--workers 2, APScheduler file lock); email alerts switched to Resend HTTPS API (Railway blocks SMTP); Send Test Alert buttons in Settings; CIB SMS keywords expanded. All code pushed (2d4dfd5).
+Last session (2026-03-24): Sidebar collapsible on desktop (◀/▶ toggle, smooth CSS transition); duplicate Dashboard heading removed; automation export session fix (pending_exports moved from in-memory dict to /tmp JSON files — fixes 404 with --workers 2); Meta balance computed from cashflow (carried + Ads out − Meta spend); Meta opening balance field in Settings. All code pushed (dd19846).
 Env vars required in Railway: `GEMINI_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `VITE_META_APP_ID` (build var), `RESEND_API_KEY`.
 Facebook App must whitelist `ecom-production-a643.up.railway.app` in App Domains + OAuth redirect URIs.
 Resend domain `seifeltohamy.com` DNS propagating — verify in Resend dashboard before testing alerts.

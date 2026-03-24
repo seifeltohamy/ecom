@@ -65,6 +65,11 @@
 - [x] Email alerts via Resend — Railway blocks SMTP; switched to Resend HTTPS API; sender alerts@seifeltohamy.com; Send Test Alert buttons in Settings
 - [x] CIB SMS keywords — added account 4707 + card 2297 formats (# **2297 and **2297 #)
 - [x] EGP exchange rate — fixed frankfurter.app (404) → open.er-api.com
+- [x] Meta balance from cashflow — compute_meta_balance (carried + Ads out − spend); meta_carried_balance setting; auto-carry on new month
+- [x] Meta opening balance — Settings field to set initial carried balance; Meta alert uses Resend (no Gmail password needed)
+- [x] Sidebar collapsible — desktop toggle ◀/▶ button; collapsed = 0px width with smooth transition; mobile unchanged
+- [x] Duplicate Dashboard heading removed — Home.jsx no longer renders its own h1/subtitle
+- [x] Automation export session fix — pending_exports moved from in-memory dict to /tmp JSON files; fixes 404 with --workers 2
 
 ## In Progress
 

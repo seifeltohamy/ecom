@@ -3,6 +3,33 @@
 
 ---
 
+## Session — 2026-03-24 (Sidebar collapse + Dashboard cleanup + Automation fix)
+
+### What Was Done
+
+**Duplicate Dashboard heading removed:**
+- `frontend/src/pages/Home.jsx`: removed hardcoded `<h1>Dashboard</h1>` + subtitle paragraph — Layout already renders these from `pageMeta`
+
+**Collapsible sidebar (desktop):**
+- `frontend/src/App.jsx`: added `sidebarOpen` state (default `true`); toggle button `◀/▶` in page header (hidden on mobile); sidebar gets `.collapsed` class
+- `frontend/src/index.css`: `.zen-sidebar.collapsed { width: 0; padding: 0; overflow: hidden; }` with `transition: width/padding .25s ease`
+- Mobile unaffected — still uses hamburger topbar
+
+**Automation export session fix — "Export session expired or not found":**
+- Root cause: `--workers 2` means SSE runs on worker A (stores file_id in memory), upload hits worker B (empty dict → 404)
+- Fix in `app/routers/bosta.py`: replaced in-memory `pending_exports` dict with disk-based JSON files at `/tmp/ecomhq_export_<uuid>.json` — all workers share the same filesystem
+- Added helpers: `_save_export`, `_load_export`, `_delete_export`
+
+**Meta balance + opening balance (continued from prior session):**
+- `compute_meta_balance(brand_id)` in `app/meta_client.py`: balance = carried + Ads cashflow out this month − Meta API spend
+- `meta_carried_balance` in `app_settings`: set via Settings "Meta Opening Balance" field; auto-saved when creating a new cashflow month
+- Meta balance alert (`app/meta_balance_alert.py`): uses `compute_meta_balance`; guard changed from `if not email or not password` → `if not email` (Resend doesn't need Gmail password)
+
+### Pending
+- None
+
+---
+
 ## Session — 2026-03-23 (Production scaling + Email alerts + CIB SMS keywords)
 
 ### What Was Done
