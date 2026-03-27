@@ -18,6 +18,7 @@ import Categories   from './pages/Categories.jsx';
 import AdminPortal  from './pages/AdminPortal.jsx';
 import BI           from './pages/BI.jsx';
 import Todo         from './pages/Todo.jsx';
+import Emails       from './pages/Emails.jsx';
 
 const pageMeta = {
   '/':              { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
@@ -32,6 +33,7 @@ const pageMeta = {
   '/admin':         { title: 'Admin Overview',  subtitle: 'Numbers across all brands.' },
   '/bi':            { title: 'BI Assistant',    subtitle: 'Ask questions about your data.' },
   '/todo':          { title: 'To Do',           subtitle: 'Kanban board — tasks and activities by person.' },
+  '/emails':        { title: 'Emails',          subtitle: 'Gmail inbox summary and action items — last 7 days.' },
 };
 
 // Pages that can be permission-controlled for viewer users (shown as checkboxes)
@@ -46,6 +48,7 @@ export const PERMISSIONED_PAGES = [
   { path: '/settings',    label: 'Settings'     },
   { path: '/bi',          label: 'BI Assistant' },
   { path: '/todo',        label: 'To Do'        },
+  { path: '/emails',      label: 'Emails'       },
 ];
 
 function SwitchBrandButton({ close }) {
@@ -174,6 +177,7 @@ function Layout() {
           {canSee('/categories')  && <NavLink to="/categories"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>}
           {canSee('/bi')          && <NavLink to="/bi"            style={({ isActive }) => S.navItem(isActive)} onClick={close}>BI Assistant</NavLink>}
           {canSee('/todo')        && <NavLink to="/todo"          style={({ isActive }) => S.navItem(isActive)} onClick={close}>To Do</NavLink>}
+          {canSee('/emails')      && <NavLink to="/emails"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Emails</NavLink>}
           {userRole === 'admin' && (
             <NavLink to="/users" style={({ isActive }) => S.navItem(isActive)} onClick={close}>Users</NavLink>
           )}
@@ -250,6 +254,7 @@ export default function App() {
               <Route path="categories"   element={<Categories />} />
               <Route path="bi"           element={<BI />} />
               <Route path="todo"         element={<Todo />} />
+              <Route path="emails"       element={<Emails />} />
               <Route path="settings"     element={<Settings />} />
               <Route path="users"        element={<Users />} />
             </Route>
