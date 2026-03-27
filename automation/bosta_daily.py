@@ -72,9 +72,40 @@ def trigger_bosta_export(email: str, password: str) -> None:
         log.info("  Navigating to Bosta signin…")
         page.goto("https://business.bosta.co/signin", timeout=60000)
         page.wait_for_load_state("networkidle")
+        page.wait_for_timeout(2000)  # extra settle time after networkidle
 
-        page.fill('input[type="email"], input[name="email"]', email)
-        page.fill('input[type="password"], input[name="password"]', password)
+        # Try multiple selectors — Bosta occasionally changes their login page
+        EMAIL_SELECTORS = [
+            'input[type="email"]',
+            'input[name="email"]',
+            'input[placeholder*="mail" i]',
+            'input[placeholder*="الإيميل"]',
+            'input[placeholder*="البريد"]',
+            'input[type="text"]',  # last resort: first text input
+        ]
+        PASSWORD_SELECTORS = [
+            'input[type="password"]',
+            'input[name="password"]',
+        ]
+
+        email_field = None
+        for sel in EMAIL_SELECTORS:
+            try:
+                page.wait_for_selector(sel, state="visible", timeout=5000)
+                email_field = sel
+                break
+            except Exception:
+                continue
+
+        if not email_field:
+            # Dump page HTML to log for debugging
+            log.error(f"  Could not find email input. Page URL: {page.url}")
+            log.error(f"  Page title: {page.title()}")
+            raise RuntimeError("Email input not found on Bosta signin page — selectors need updating")
+
+        log.info(f"  Using email selector: {email_field}")
+        page.fill(email_field, email)
+        page.fill(PASSWORD_SELECTORS[0], password)
         page.click('button[type="submit"]')
         page.wait_for_url("**/overview**", timeout=60000)
         page.wait_for_load_state("networkidle")
