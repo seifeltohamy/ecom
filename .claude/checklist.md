@@ -70,6 +70,8 @@
 - [x] Sidebar collapsible — desktop toggle ◀/▶ button; collapsed = 0px width with smooth transition; mobile unchanged
 - [x] Duplicate Dashboard heading removed — Home.jsx no longer renders its own h1/subtitle
 - [x] Automation export session fix — pending_exports moved from in-memory dict to /tmp JSON files; fixes 404 with --workers 2
+- [x] Bosta login selector hardened — tries 6 selectors in order; logs which matched; handles Bosta page redesigns
+- [x] Emails page — Gmail inbox triage via Gemini; action items by priority; markdown summary; cached in app_settings; reuses bosta_email credentials
 
 ## In Progress
 

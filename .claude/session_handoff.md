@@ -3,6 +3,35 @@
 
 ---
 
+## Session — 2026-03-27/28 (Emails page + Bosta login fix)
+
+### What Was Done
+
+**Bosta automation login selector hardened (`automation/bosta_daily.py`):**
+- Original selector `input[type="email"], input[name="email"]` timed out — Bosta changed their signin page
+- Now tries 6 selectors in order: `input[type="email"]` → `input[name="email"]` → `input[placeholder*="mail" i]` → Arabic placeholders → `input[type="text"]` (last resort)
+- Logs which selector matched; on total failure logs page URL + title for debugging
+- Commit: `1c448da`
+
+**Emails page — Gmail inbox triage via Gemini (`/emails`):**
+- New `app/routers/emails.py`: `GET /emails/summary` (cached) + `POST /emails/scan` (IMAP fetch → Gemini)
+- IMAP connects to Gmail All Mail, fetches last 7 days, up to 100 emails, 400-char snippet per email
+- Calls Gemini 2.5 Flash with structured triage prompt → JSON `{summary, action_items}`
+- Action items have priority: high/medium/low; result cached in `app_settings` key `email_summary_cache` per brand
+- Reuses existing `bosta_email` + `bosta_email_password` credentials (no new settings needed)
+- New `frontend/src/pages/Emails.jsx`: action items card (color-coded priority badges), markdown summary card, spinning refresh button, last-scanned timestamp, not-configured callout
+- `App.jsx`: pageMeta, route, NavLink, PERMISSIONED_PAGES all wired
+- `vite.config.js`: `/emails` proxy added
+- `lucide-react` added to `package.json` (was missing → fixed Railway build failure `ef9d514`)
+- Commits: `fcf0941`, `ef9d514`
+
+### Pending
+- Resend domain `seifeltohamy.com` DNS — verify in Resend dashboard before testing email alerts
+- Password change for users
+- Cashflow CSV export
+
+---
+
 ## Session — 2026-03-24 (Sidebar collapse + Dashboard cleanup + Automation fix)
 
 ### What Was Done
