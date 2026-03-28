@@ -442,7 +442,11 @@ def run_export_sse(
 
     def _stream():
         while True:
-            msg = q.get()
+            try:
+                msg = q.get(timeout=15)
+            except queue.Empty:
+                yield ": keepalive\n\n"  # prevent Railway proxy from cutting the connection
+                continue
             yield f"data: {msg}\n\n"
             if msg.startswith("READY:") or msg.startswith("ERROR:"):
                 break
