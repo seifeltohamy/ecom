@@ -198,6 +198,8 @@ async def _process_excel(contents: bytes, date_from: str | None, date_to: str | 
         db.commit()
         db.refresh(saved)
         report["report_id"] = saved.id
+        report["date_from"]  = saved.date_from
+        report["date_to"]    = saved.date_to
     return report
 
 
