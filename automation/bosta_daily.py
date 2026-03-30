@@ -116,6 +116,32 @@ def trigger_bosta_export(email: str, password: str) -> None:
         page.wait_for_load_state("networkidle")
         log.info(f"  Orders page loaded — current URL: {page.url}")
 
+        # Dismiss announcement modal if present (Bosta shows this after login)
+        MODAL_CLOSE_SELECTORS = [
+            '.br-important-announcement__modal button.ant-modal-close',
+            '.br-important-announcement__modal .ant-modal-close',
+            '.ant-modal-close',
+            'button[aria-label="Close"]',
+            '.ant-modal-close-x',
+        ]
+        for sel in MODAL_CLOSE_SELECTORS:
+            try:
+                page.wait_for_selector(sel, state="visible", timeout=4000)
+                page.click(sel)
+                log.info(f"  Dismissed announcement modal via: {sel}")
+                page.wait_for_timeout(500)
+                break
+            except Exception:
+                continue
+        else:
+            # Also try pressing Escape as a fallback
+            try:
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(500)
+                log.info("  Pressed Escape to dismiss any open modal")
+            except Exception:
+                pass
+
         log.info("  Clicking Successful tab (تم بنجاح)…")
         page.wait_for_selector('text=تم بنجاح', state='visible', timeout=30000)
         page.click('text=تم بنجاح', timeout=30000)
