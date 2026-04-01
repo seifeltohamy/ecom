@@ -71,11 +71,15 @@ export default function Cashflow() {
 
   useEffect(() => { loadMonths(); }, [loadMonths]);
   useEffect(() => { loadRows(activeMonth); }, [activeMonth, loadRows]);
+  const loadWallet = useCallback(() => {
+    authFetch('/cashflow/wallet').then(r => r.json()).then(d => { if (d.history !== undefined) setWallet(d); });
+  }, []);
+
   useEffect(() => {
     authFetch('/categories').then(r => r.json()).then(data => { if (Array.isArray(data)) setAllCats(data); });
     authFetch('/cashflow/sms-suggestions').then(r => r.json()).then(data => { if (Array.isArray(data)) setSuggestions(data); }).catch(() => {});
-    authFetch('/cashflow/wallet').then(r => r.json()).then(d => { if (d.history) setWallet(d); });
-  }, []);
+    loadWallet();
+  }, [loadWallet]);
 
   const dismissSuggestion = async (id) => {
     if (!await confirm('Dismiss Suggestion', 'It will be hidden but kept in records.')) return;
@@ -129,6 +133,7 @@ export default function Cashflow() {
       setSuggestions(s => s.filter(x => x.id !== acceptingId));
       setAcceptingId(null);
       loadRows(activeMonth);
+      loadWallet();
     }
   };
 
@@ -172,6 +177,7 @@ export default function Cashflow() {
       data = await res.json();
       if (!res.ok) return setError(data.detail || 'Failed to save entry.');
       if (data.rows) setRows(data.rows);
+      loadWallet();
       reset();
       setOpen(false);
     } catch {
@@ -184,6 +190,7 @@ export default function Cashflow() {
       const res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries/${row.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.rows) setRows(data.rows);
+      loadWallet();
     } catch { /* ignore */ }
   };
 
@@ -195,7 +202,7 @@ export default function Cashflow() {
     });
     const data = await res.json();
     if (data.months) setMonths(data.months);
-    authFetch('/cashflow/wallet').then(r => r.json()).then(d => { if (d.history) setWallet(d); });
+    loadWallet();
     setActiveMonth(month);
   };
 
@@ -388,7 +395,7 @@ export default function Cashflow() {
               <div style={{ ...cs, borderTop: '3px solid var(--accent)' }}>
                 <div style={ls}>Master Wallet</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '.3rem', color: wallet.balance >= 0 ? 'var(--success)' : 'var(--danger)' }}>EGP {fmt(wallet.balance)}</div>
-                <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: '.2rem' }}>Accumulated from previous months</div>
+                <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: '.2rem' }}>Live balance across all months</div>
                 {wallet.history.length > 0 && (
                   <button onClick={() => setShowWalletHistory(true)} style={{ marginTop: '.4rem', fontSize: '.78rem', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                     View history →

@@ -161,22 +161,26 @@ def meta_disconnect(
 def meta_summary(
     date_from: str | None = None,
     date_to:   str | None = None,
+    month:     str | None = None,
     brand_id: int = Depends(get_brand_id),
     _user: models.User = Depends(get_current_user),
 ):
-    """Return {spend, balance, currency} for the given date range (defaults: current month)."""
+    """Return {spend, balance, currency} for the given date range (defaults: current month).
+    If `month` is provided (e.g. 'Apr 2026'), derives date range and scopes balance to that month."""
     s = _get_meta_settings(brand_id)
     token      = s.get("meta_access_token", "")
     account_id = s.get("meta_ad_account_id", "")
     if not token or not account_id:
         return {"connected": False, "spend": 0, "balance": 0, "currency": "EGP"}
 
-    if not date_from or not date_to:
+    if month:
+        date_from, date_to = meta_client._month_name_to_range(month)
+    elif not date_from or not date_to:
         date_from, date_to = _current_month_range()
 
     try:
         spend_data   = meta_client.get_spend_summary(token, account_id, date_from, date_to)
-        balance_data = meta_client.compute_meta_balance(brand_id)
+        balance_data = meta_client.compute_meta_balance(brand_id, month_name=month)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Meta API error: {str(e)}")
 

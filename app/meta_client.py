@@ -107,10 +107,26 @@ def _usd_to_egp_rate() -> float:
         return 50.0   # fallback if API is unreachable
 
 
-def compute_meta_balance(brand_id: int) -> dict:
+def _month_name_to_range(month_name: str) -> tuple[str, str]:
+    """Convert 'Apr 2026' to ('2026-04-01', '2026-04-30'), capped at today."""
+    import calendar
+    from datetime import datetime, date
+    dt = datetime.strptime(f"1 {month_name}", "%d %b %Y")
+    first = dt.date()
+    last_day = calendar.monthrange(first.year, first.month)[1]
+    last = date(first.year, first.month, last_day)
+    today = date.today()
+    if last > today:
+        last = today
+    return first.strftime("%Y-%m-%d"), last.strftime("%Y-%m-%d")
+
+
+def compute_meta_balance(brand_id: int, month_name: str | None = None) -> dict:
     """Compute remaining Meta Ads balance from cashflow data (not Meta API).
 
     Formula: carried_from_prev_month + Ads money-out (this month) - Meta spend (this month)
+
+    If month_name is provided, scopes ads_deposited and meta_spend to that month.
     """
     from app.deps import get_db
     from app import models
@@ -121,14 +137,20 @@ def compute_meta_balance(brand_id: int) -> dict:
 
         carried = float(settings.get("meta_carried_balance", "0") or "0")
 
-        current_month = db.query(models.CashflowMonth).filter(
-            models.CashflowMonth.brand_id == brand_id
-        ).order_by(models.CashflowMonth.id.desc()).first()
+        if month_name:
+            target_month = db.query(models.CashflowMonth).filter(
+                models.CashflowMonth.brand_id == brand_id,
+                models.CashflowMonth.name == month_name,
+            ).first()
+        else:
+            target_month = db.query(models.CashflowMonth).filter(
+                models.CashflowMonth.brand_id == brand_id
+            ).order_by(models.CashflowMonth.id.desc()).first()
 
         ads_deposited = 0.0
-        if current_month:
+        if target_month:
             entries = db.query(models.CashflowEntry).filter(
-                models.CashflowEntry.month_id == current_month.id,
+                models.CashflowEntry.month_id == target_month.id,
                 models.CashflowEntry.type == "out",
                 models.CashflowEntry.category == "Ads",
             ).all()
@@ -138,10 +160,13 @@ def compute_meta_balance(brand_id: int) -> dict:
     account_id = settings.get("meta_ad_account_id", "")
     meta_spend = 0.0
     if token and account_id:
-        from datetime import datetime, timezone
-        today     = datetime.now(timezone.utc)
-        date_from = today.replace(day=1).strftime("%Y-%m-%d")
-        date_to   = today.strftime("%Y-%m-%d")
+        if month_name:
+            date_from, date_to = _month_name_to_range(month_name)
+        else:
+            from datetime import datetime, timezone
+            today     = datetime.now(timezone.utc)
+            date_from = today.replace(day=1).strftime("%Y-%m-%d")
+            date_to   = today.strftime("%Y-%m-%d")
         try:
             meta_spend = get_spend_summary(token, account_id, date_from, date_to)["spend"]
         except Exception:

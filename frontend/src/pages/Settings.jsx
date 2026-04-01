@@ -646,7 +646,7 @@ export default function Settings() {
                 An email alert is sent every 10 minutes when your Meta Ads balance drops below this amount.
               </p>
 
-              <label style={{ ...labelStyle, marginTop: '1rem' }}>Meta Opening Balance</label>
+              <label style={{ ...labelStyle, marginTop: '1rem' }}>Current Meta Balance</label>
               <div style={{ position: 'relative' }}>
                 <span style={{
                   position: 'absolute', left: '.75rem', top: '50%', transform: 'translateY(-50%)',
@@ -654,14 +654,13 @@ export default function Settings() {
                 }}>EGP</span>
                 <input
                   type="number"
-                  min="0"
                   value={metaCarriedBalance}
                   onChange={e => setMetaCarriedBalance(e.target.value)}
                   style={{ ...inputStyle, paddingLeft: '2.75rem', width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
               <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.4rem' }}>
-                The balance already in your Meta wallet before you started tracking deposits here.
+                Set the current remaining Meta Ads balance. Use negative values if overspent.
               </p>
 
               <div style={{ display: 'flex', gap: '.75rem', marginTop: '1.25rem' }}>

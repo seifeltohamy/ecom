@@ -27,45 +27,26 @@ def add_cashflow_month(payload: schemas.CashflowMonthIn, brand_id: int = Depends
             models.CashflowMonth.name == month, models.CashflowMonth.brand_id == brand_id
         ).first()
         if not existing:
-            # Snapshot the most recently created month's net into the master wallet
             prev_month = db.query(models.CashflowMonth).filter(
                 models.CashflowMonth.brand_id == brand_id
             ).order_by(models.CashflowMonth.created_at.desc()).first()
-
-            if prev_month:
-                entries = db.query(models.CashflowEntry).filter(
-                    models.CashflowEntry.month_id == prev_month.id
-                ).all()
-                month_net = (
-                    sum(e.amount for e in entries if e.type == 'in')
-                    - sum(e.amount for e in entries if e.type == 'out')
-                )
-                last_wallet = db.query(models.WalletEntry).filter(
-                    models.WalletEntry.brand_id == brand_id
-                ).order_by(models.WalletEntry.created_at.desc()).first()
-                prev_balance = last_wallet.balance_after if last_wallet else 0.0
-                db.add(models.WalletEntry(
-                    brand_id=brand_id,
-                    month_name=prev_month.name,
-                    month_net=month_net,
-                    balance_after=prev_balance + month_net,
-                ))
 
             db.add(models.CashflowMonth(name=month, brand_id=brand_id))
             db.commit()
 
             # Carry Meta Ads remaining balance forward to the new month
-            from app.meta_client import compute_meta_balance
-            meta_bal = compute_meta_balance(brand_id)
-            setting = db.query(models.AppSettings).filter(
-                models.AppSettings.brand_id == brand_id,
-                models.AppSettings.key == "meta_carried_balance",
-            ).first()
-            if setting:
-                setting.value = str(meta_bal["balance"])
-            else:
-                db.add(models.AppSettings(brand_id=brand_id, key="meta_carried_balance", value=str(meta_bal["balance"])))
-            db.commit()
+            if prev_month:
+                from app.meta_client import compute_meta_balance
+                meta_bal = compute_meta_balance(brand_id, month_name=prev_month.name)
+                setting = db.query(models.AppSettings).filter(
+                    models.AppSettings.brand_id == brand_id,
+                    models.AppSettings.key == "meta_carried_balance",
+                ).first()
+                if setting:
+                    setting.value = str(meta_bal["balance"])
+                else:
+                    db.add(models.AppSettings(brand_id=brand_id, key="meta_carried_balance", value=str(meta_bal["balance"])))
+                db.commit()
         months = db.query(models.CashflowMonth).filter(
             models.CashflowMonth.brand_id == brand_id
         ).order_by(models.CashflowMonth.created_at).all()
@@ -74,22 +55,31 @@ def add_cashflow_month(payload: schemas.CashflowMonthIn, brand_id: int = Depends
 
 @router.get("/cashflow/wallet")
 def get_wallet(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    """Compute wallet balance dynamically from all cashflow entries."""
     with get_db() as db:
-        entries = db.query(models.WalletEntry).filter(
-            models.WalletEntry.brand_id == brand_id
-        ).order_by(models.WalletEntry.created_at.desc()).all()
-    balance = entries[0].balance_after if entries else 0.0
+        months = db.query(models.CashflowMonth).filter(
+            models.CashflowMonth.brand_id == brand_id
+        ).order_by(models.CashflowMonth.created_at).all()
+
+        history = []
+        running_balance = 0.0
+        for m in months:
+            entries = db.query(models.CashflowEntry).filter(
+                models.CashflowEntry.month_id == m.id
+            ).all()
+            month_in = sum(e.amount for e in entries if e.type == 'in')
+            month_out = sum(e.amount for e in entries if e.type == 'out')
+            month_net = month_in - month_out
+            running_balance += month_net
+            history.append({
+                "month_name": m.name,
+                "month_net": round(month_net, 2),
+                "balance_after": round(running_balance, 2),
+            })
+
     return {
-        "balance": balance,
-        "history": [
-            {
-                "month_name":    e.month_name,
-                "month_net":     e.month_net,
-                "balance_after": e.balance_after,
-                "created_at":    e.created_at.isoformat(),
-            }
-            for e in entries
-        ],
+        "balance": round(running_balance, 2),
+        "history": list(reversed(history)),
     }
 
 
