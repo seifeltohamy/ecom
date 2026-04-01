@@ -89,7 +89,7 @@ export default function Cashflow() {
 
   const openAccept = (s) => {
     setAcceptingId(s.id);
-    setAcceptForm({ month: '', category: s.category || '', notes: s.description || '', amount: String(s.amount) });
+    setAcceptForm({ month: activeMonth, category: s.category || '', notes: s.description || '', amount: String(s.amount) });
   };
 
   const checkBostaPayouts = async () => {
