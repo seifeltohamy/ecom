@@ -167,7 +167,7 @@ export default function Cashflow() {
         });
       } else {
         const today = new Date();
-        const autoDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'numeric' });
+        const autoDate = today.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
         res  = await authFetch(`/cashflow/${encodeURIComponent(activeMonth)}/entries`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

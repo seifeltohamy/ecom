@@ -264,7 +264,7 @@ def accept_suggestion(
         today  = datetime.utcnow()
         entry  = models.CashflowEntry(
             month_id   = month.id,
-            date       = today.strftime("%-d/%-m"),
+            date       = today.strftime("%d/%m"),
             type       = suggestion.type,
             amount     = amount,
             category   = category,
