@@ -66,6 +66,40 @@ def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_i
         "bosta_payout_days":      payload.bosta_payout_days,
     }
     updates = {k: v for k, v in raw.items() if v is not None and not (k in _CREDENTIAL_KEYS and v == "")}
+
+    # When user sets "Current Meta Balance" to X, normalize so compute_meta_balance
+    # returns exactly X. Formula: balance = carried + ads - spend → carried = X - ads + spend
+    if "meta_carried_balance" in updates:
+        desired = float(updates["meta_carried_balance"])
+        from app.meta_client import get_spend_summary
+        with get_db() as db:
+            settings = {r.key: r.value for r in db.query(models.AppSettings).filter(
+                models.AppSettings.brand_id == brand_id).all()}
+            current_month = db.query(models.CashflowMonth).filter(
+                models.CashflowMonth.brand_id == brand_id
+            ).order_by(models.CashflowMonth.id.desc()).first()
+            ads_deposited = 0.0
+            if current_month:
+                entries = db.query(models.CashflowEntry).filter(
+                    models.CashflowEntry.month_id == current_month.id,
+                    models.CashflowEntry.type == "out",
+                    models.CashflowEntry.category == "Ads",
+                ).all()
+                ads_deposited = sum(e.amount for e in entries)
+        token = settings.get("meta_access_token", "")
+        account_id = settings.get("meta_ad_account_id", "")
+        meta_spend = 0.0
+        if token and account_id:
+            from datetime import datetime, timezone
+            today = datetime.now(timezone.utc)
+            date_from = today.replace(day=1).strftime("%Y-%m-%d")
+            date_to = today.strftime("%Y-%m-%d")
+            try:
+                meta_spend = get_spend_summary(token, account_id, date_from, date_to)["spend"]
+            except Exception:
+                pass
+        updates["meta_carried_balance"] = str(round(desired - ads_deposited + meta_spend, 2))
+
     with get_db() as db:
         for k, v in updates.items():
             row = db.query(models.AppSettings).filter(
