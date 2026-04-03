@@ -68,6 +68,12 @@ export default function StockValue() {
     setLoading(false);
   }, [source]);
 
+  useEffect(() => {
+    authFetch('/settings').then(r => r.json()).then(d => {
+      if (d.inventory_source && d.inventory_source !== 'auto') setSource(d.inventory_source);
+    }).catch(() => {});
+  }, []);
+
   useEffect(() => { load(); }, [load]);
 
   const handlePurchasePriceChange = (sku, val) => {
@@ -147,7 +153,15 @@ export default function StockValue() {
         {availableSources.length > 1 && (
           <select
             value={source}
-            onChange={e => setSource(e.target.value)}
+            onChange={e => {
+              const val = e.target.value;
+              setSource(val);
+              authFetch('/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inventory_source: val }),
+              });
+            }}
             style={{ padding: '.45rem .7rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface2)', color: 'var(--text)', fontSize: '.85rem', cursor: 'pointer' }}
           >
             {availableSources.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}

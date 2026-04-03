@@ -23,6 +23,7 @@ class SettingsUpdate(BaseModel):
     bosta_payout_days:         str | None = None
     shopify_store_url:         str | None = None
     shopify_access_token:      str | None = None
+    inventory_source:          str | None = None
 
 
 @router.get("/settings")
@@ -48,6 +49,7 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         "bosta_payout_days":        data.get("bosta_payout_days", "2"),
         "shopify_store_url":        data.get("shopify_store_url", ""),
         "shopify_access_token":     data.get("shopify_access_token", ""),
+        "inventory_source":         data.get("inventory_source", "auto"),
     }
 
 
@@ -70,6 +72,7 @@ def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_i
         "bosta_payout_days":      payload.bosta_payout_days,
         "shopify_store_url":      payload.shopify_store_url,
         "shopify_access_token":   payload.shopify_access_token,
+        "inventory_source":       payload.inventory_source,
     }
     updates = {k: v for k, v in raw.items() if v is not None and not (k in _CREDENTIAL_KEYS and v == "")}
 
@@ -169,9 +172,12 @@ def get_stock_value(source: str = "auto", brand_id: int = Depends(get_brand_id),
     if has_shopify:
         available_sources.append("shopify")
 
-    # Resolve source
+    # Resolve source — use saved preference, then fall back
     if source == "auto":
-        if has_bosta:
+        saved = settings.get("inventory_source", "auto")
+        if saved != "auto" and saved in available_sources:
+            source = saved
+        elif has_bosta:
             source = "bosta"
         elif has_shopify:
             source = "shopify"
