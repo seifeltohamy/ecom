@@ -72,6 +72,11 @@
 - [x] Automation export session fix — pending_exports moved from in-memory dict to /tmp JSON files; fixes 404 with --workers 2
 - [x] Bosta login selector hardened — tries 6 selectors in order; logs which matched; handles Bosta page redesigns
 - [x] Emails page — Gmail inbox triage via Gemini; action items by priority; markdown summary; cached in app_settings; reuses bosta_email credentials
+- [x] Master Wallet live balance — dynamic computation from all cashflow entries; instant updates on add/edit/delete; no more snapshots
+- [x] Meta Ads per-month scoping — Dashboard meta spend/balance updates when switching months; compute_meta_balance accepts month_name
+- [x] Current Meta Balance override — Settings field sets exact balance; future Ads entries add on top; allows negative values
+- [x] Suggestion accept defaults to active month — no more blank month dropdown
+- [x] Date format standardized — DD/MM zero-padded across backend and frontend
 
 ## In Progress
 

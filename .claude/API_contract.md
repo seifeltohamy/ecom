@@ -133,12 +133,12 @@
 - **Auth:** Bearer (any role) + brand in JWT
 - **Body:** JSON — `{ month: string }`
 - **Response:** `{ ok, months: string[] }`
-- **Side effect:** If month is new, snapshots previous month's net into `wallet_entries`
+- **Side effect:** If month is new, carries forward Meta Ads balance to the new month via `compute_meta_balance`
 
 ### GET /cashflow/wallet
 - **Auth:** Bearer (any role) + brand in JWT
-- **Response:** `{ balance: float, history: [{ month_name, month_net, balance_after, created_at }] }` — newest first
-- **Note:** Registered before `GET /cashflow/{month}` to avoid route shadowing
+- **Response:** `{ balance: float, history: [{ month_name, month_net, balance_after }] }` — newest first
+- **Note:** Computed dynamically from all cashflow entries (no snapshots). Balance updates instantly on any entry change. Registered before `GET /cashflow/{month}` to avoid route shadowing
 
 ### GET /cashflow/{month}
 - **Auth:** Bearer (any role) + brand in JWT
@@ -440,9 +440,10 @@
 
 ### GET /meta/summary
 - **Auth:** Bearer (any role) + brand in JWT
-- **Query params:** `date_from`, `date_to` (ISO strings, optional — default current month)
+- **Query params:** `date_from`, `date_to` (ISO strings, optional), `month` (e.g. "Apr 2026", optional — overrides date_from/date_to)
 - **Response (connected):** `{ connected: true, spend: float, balance: float, currency: string, date_from, date_to }`
 - **Response (not connected):** `{ connected: false, spend: 0, balance: 0, currency: "EGP" }`
+- **Note:** When `month` is provided, derives date range and scopes balance computation to that month
 - **Errors:** 502 on Meta API error
 
 ### GET /meta/campaigns

@@ -62,6 +62,13 @@ export default function Settings() {
   const [showEmailPass,       setShowEmailPass]       = useState(false);
   const [payoutDays,          setPayoutDays]          = useState('2');
 
+  // Shopify
+  const [shopifyUrl,         setShopifyUrl]         = useState('');
+  const [shopifyToken,       setShopifyToken]       = useState('');
+  const [showShopifyToken,   setShowShopifyToken]   = useState(false);
+  const [savingShopify,      setSavingShopify]       = useState(false);
+  const [shopifyMsg,         setShopifyMsg]          = useState(null);
+
   // Stock alert config
   const [alertEnabled,  setAlertEnabled]  = useState(true);
   const [alertTime1,    setAlertTime1]    = useState('09:00');
@@ -244,6 +251,8 @@ export default function Settings() {
         setBostaPassword(d.bosta_password || '');
         setBostaEmailPassword(d.bosta_email_password || '');
         setPayoutDays(d.bosta_payout_days || '2');
+        setShopifyUrl(d.shopify_store_url || '');
+        setShopifyToken(d.shopify_access_token || '');
         setAlertEnabled(d.alert_enabled !== 'false');
         setAlertTime1(d.alert_time_1 || '09:00');
         const t2 = d.alert_time_2 || '';
@@ -284,6 +293,20 @@ export default function Settings() {
     setMsg(res.ok
       ? { type: 'success', text: 'Settings saved.' }
       : { type: 'error',   text: 'Failed to save settings.' });
+  }
+
+  async function saveShopify() {
+    setSavingShopify(true);
+    setShopifyMsg(null);
+    const res = await authFetch('/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shopify_store_url: shopifyUrl, shopify_access_token: shopifyToken }),
+    });
+    setSavingShopify(false);
+    setShopifyMsg(res.ok
+      ? { type: 'success', text: 'Shopify settings saved.' }
+      : { type: 'error', text: 'Failed to save Shopify settings.' });
   }
 
   async function testStockAlert() {
@@ -437,6 +460,63 @@ export default function Settings() {
         <Btn onClick={save} disabled={saving || loading}>
           {saving ? 'Saving…' : 'Save Settings'}
         </Btn>
+      </Card>
+
+      {/* ── Shopify Integration ── */}
+      <Card>
+        <CardTitle>Shopify Integration</CardTitle>
+        <p style={{ color: 'var(--muted)', fontSize: '.85rem', marginBottom: '1.25rem' }}>
+          Connect your Shopify store to view inventory on the Stock Value page. Create an access token in Shopify Admin → Settings → Apps → Develop apps → Admin API access token.
+        </p>
+
+        <label style={labelStyle}>Store URL</label>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <input
+            type="text"
+            value={loading ? '' : shopifyUrl}
+            onChange={e => setShopifyUrl(e.target.value)}
+            disabled={loading}
+            placeholder="mystore.myshopify.com"
+            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+          />
+        </div>
+
+        <label style={labelStyle}>Admin API Access Token</label>
+        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1.5rem' }}>
+          <input
+            type={showShopifyToken ? 'text' : 'password'}
+            value={loading ? '••••••••' : shopifyToken}
+            onChange={e => setShopifyToken(e.target.value)}
+            disabled={loading}
+            placeholder="shpat_xxxxx…"
+            style={{ ...inputStyle, fontFamily: 'monospace' }}
+          />
+          {toggleBtn(showShopifyToken, setShowShopifyToken)}
+        </div>
+
+        {shopifyMsg && <Alert type={shopifyMsg.type}>{shopifyMsg.text}</Alert>}
+
+        <Btn onClick={saveShopify} disabled={savingShopify || loading}>
+          {savingShopify ? 'Saving…' : 'Save Shopify Settings'}
+        </Btn>
+
+        <details style={{ marginTop: '1.5rem' }}>
+          <summary style={{ cursor: 'pointer', fontSize: '.85rem', color: 'var(--accent)', fontWeight: 600 }}>
+            How to get your Shopify access token
+          </summary>
+          <ol style={{ fontSize: '.82rem', color: 'var(--muted)', lineHeight: 1.7, marginTop: '.75rem', paddingLeft: '1.25rem' }}>
+            <li>Go to <strong style={{ color: 'var(--text)' }}>Shopify Admin</strong> → Settings → Apps and sales channels</li>
+            <li>Click <strong style={{ color: 'var(--text)' }}>Develop apps</strong> (top right)</li>
+            <li>Click <strong style={{ color: 'var(--text)' }}>Create an app</strong> → name it anything (e.g. "EcomHQ")</li>
+            <li>Click <strong style={{ color: 'var(--text)' }}>Configure Admin API scopes</strong> → enable <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: 4, fontSize: '.78rem' }}>read_products</code> and <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: 4, fontSize: '.78rem' }}>read_inventory</code></li>
+            <li>Click <strong style={{ color: 'var(--text)' }}>Install app</strong></li>
+            <li>Copy the <strong style={{ color: 'var(--text)' }}>Admin API access token</strong> (starts with <code style={{ background: 'var(--surface2)', padding: '1px 5px', borderRadius: 4, fontSize: '.78rem' }}>shpat_</code>)</li>
+            <li>Paste it above and click Save</li>
+          </ol>
+          <p style={{ fontSize: '.78rem', color: 'var(--muted)', marginTop: '.5rem' }}>
+            No Shopify Partner account or app publishing needed — this is a private custom app on your own store.
+          </p>
+        </details>
       </Card>
 
       {/* ── Stock Alert Settings ── */}

@@ -21,6 +21,8 @@ class SettingsUpdate(BaseModel):
     meta_balance_threshold:    str | None = None
     meta_carried_balance:      str | None = None
     bosta_payout_days:         str | None = None
+    shopify_store_url:         str | None = None
+    shopify_access_token:      str | None = None
 
 
 @router.get("/settings")
@@ -44,10 +46,12 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         "meta_balance_threshold":   data.get("meta_balance_threshold", "5000"),
         "meta_carried_balance":     data.get("meta_carried_balance", "0"),
         "bosta_payout_days":        data.get("bosta_payout_days", "2"),
+        "shopify_store_url":        data.get("shopify_store_url", ""),
+        "shopify_access_token":     data.get("shopify_access_token", ""),
     }
 
 
-_CREDENTIAL_KEYS = {"bosta_api_key", "bosta_email", "bosta_password", "bosta_email_password"}
+_CREDENTIAL_KEYS = {"bosta_api_key", "bosta_email", "bosta_password", "bosta_email_password", "shopify_access_token"}
 
 @router.put("/settings")
 def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
@@ -64,6 +68,8 @@ def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_i
         "meta_balance_threshold": payload.meta_balance_threshold,
         "meta_carried_balance":   payload.meta_carried_balance,
         "bosta_payout_days":      payload.bosta_payout_days,
+        "shopify_store_url":      payload.shopify_store_url,
+        "shopify_access_token":   payload.shopify_access_token,
     }
     updates = {k: v for k, v in raw.items() if v is not None and not (k in _CREDENTIAL_KEYS and v == "")}
 
@@ -120,44 +126,75 @@ class StockPurchasePriceIn(BaseModel):
     price: float
 
 
+def _fetch_bosta_products(api_key: str) -> list[dict]:
+    """Fetch inventory from Bosta API. Returns raw product list."""
+    h = {"Authorization": api_key}
+    products = []
+    page = 0
+    limit = 100
+    while True:
+        resp = httpx.get(
+            "http://app.bosta.co/api/v2/products/fulfillment/list-products",
+            headers=h,
+            params={"page": page, "limit": limit},
+            timeout=15,
+            follow_redirects=True,
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Bosta API returned {resp.status_code}: {resp.text[:500]}")
+        data = resp.json().get("data", {})
+        batch = data.get("data", [])
+        products.extend(batch)
+        if len(batch) < limit:
+            break
+        page += 1
+    return products
+
+
 @router.get("/stock-value")
-def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+def get_stock_value(source: str = "auto", brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
-        setting = db.query(models.AppSettings).filter(
-            models.AppSettings.key == "bosta_api_key",
-            models.AppSettings.brand_id == brand_id,
-        ).first()
-        api_key = setting.value if setting else ""
+        settings = {r.key: r.value for r in db.query(models.AppSettings).filter(
+            models.AppSettings.brand_id == brand_id).all()}
 
-    if not api_key:
-        raise HTTPException(status_code=400, detail="Bosta API key not configured. Go to Settings to add it.")
+    bosta_key    = settings.get("bosta_api_key", "")
+    shopify_url  = settings.get("shopify_store_url", "")
+    shopify_tok  = settings.get("shopify_access_token", "")
+    has_bosta    = bool(bosta_key)
+    has_shopify  = bool(shopify_url and shopify_tok)
 
+    available_sources = []
+    if has_bosta:
+        available_sources.append("bosta")
+    if has_shopify:
+        available_sources.append("shopify")
+
+    # Resolve source
+    if source == "auto":
+        if has_bosta:
+            source = "bosta"
+        elif has_shopify:
+            source = "shopify"
+        else:
+            raise HTTPException(status_code=400, detail="No inventory provider configured. Go to Settings to set up Bosta or Shopify.")
+
+    # Fetch products from the chosen source
     try:
-        h = {"Authorization": api_key}
-        products = []
-        page = 0
-        limit = 100
-        while True:
-            resp = httpx.get(
-                "http://app.bosta.co/api/v2/products/fulfillment/list-products",
-                headers=h,
-                params={"page": page, "limit": limit},
-                timeout=15,
-                follow_redirects=True,
-            )
-            if resp.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"Bosta API returned {resp.status_code}: {resp.text[:500]}")
-            data = resp.json().get("data", {})
-            batch = data.get("data", [])
-            products.extend(batch)
-            if len(batch) < limit:
-                break
-            page += 1
-
+        if source == "shopify":
+            if not has_shopify:
+                raise HTTPException(status_code=400, detail="Shopify not configured. Go to Settings to add store URL and access token.")
+            from app.shopify_client import get_inventory
+            products = get_inventory(shopify_url, shopify_tok)
+        else:
+            if not has_bosta:
+                raise HTTPException(status_code=400, detail="Bosta API key not configured. Go to Settings to add it.")
+            products = _fetch_bosta_products(bosta_key)
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Could not reach Bosta API: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Could not reach {source} API: {str(e)}")
 
     with get_db() as db:
         pp_rows = db.query(models.StockPurchasePrice).filter(
@@ -227,6 +264,8 @@ def get_stock_value(brand_id: int = Depends(get_brand_id), _user: models.User = 
         "total_purchase_value": round(sum(r["purchase_value"] for r in rows), 2),
         "capital_trapped":      capital_trapped,
         "report_days":          report_days,
+        "source":               source,
+        "available_sources":    available_sources,
     }
 
 

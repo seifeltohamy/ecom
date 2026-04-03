@@ -3,6 +3,45 @@
 
 ---
 
+## Session — 2026-04-01/02 (Live Wallet + Meta per-month + Settings fix)
+
+### What Was Done
+
+**Master Wallet — live dynamic balance:**
+- `GET /cashflow/wallet` now computes balance dynamically from all cashflow entries across all months (no more snapshots)
+- Wallet updates instantly when entries are added/edited/deleted in any month
+- Removed `WalletEntry` snapshot creation from `POST /cashflow/months`
+- `wallet_entries` table remains but is no longer written to
+- Frontend: extracted `loadWallet()` function, called after every mutation (add/edit/delete entry, accept suggestion, add month)
+- Subtitle changed from "Accumulated from previous months" to "Live balance across all months"
+- Commits: `f042820`
+
+**Meta Ads balance scoped per-month:**
+- `compute_meta_balance` accepts optional `month_name` param — scopes both Ads deposits and Meta API spend to that month
+- New `_month_name_to_range` helper converts month names (both "Apr 2026" and "April 2026") to date ranges, capped at today
+- `GET /meta/summary` accepts `?month=` query param — derives date range and passes to `compute_meta_balance`
+- Dashboard (`Home.jsx`): Meta fetch tied to `selectedMonth` — switching months updates Meta spend & balance cards
+- Commits: `f042820`, `d40f256`
+
+**Settings — Current Meta Balance override:**
+- Renamed "Meta Opening Balance" → "Current Meta Balance"
+- Removed `min="0"` — allows negative values
+- Description: "Set the current remaining Meta Ads balance. Use negative values if overspent."
+- When user saves a value X, backend normalizes stored value so `compute_meta_balance` returns exactly X; future Ads cashflow entries add on top
+- Normalization formula: `stored = X - current_ads_deposited + current_meta_spend`
+- Commit: `50a6d38`
+
+**Cashflow UX fixes:**
+- Suggestion accept form defaults to active month (was blank) — commit `cd8eff7`
+- Date format standardized to DD/MM (zero-padded) — backend `%d/%m`, frontend `2-digit` — commit `47f38ad`
+
+### Pending
+- Password change for users
+- Cashflow CSV export
+- Verify Resend domain + test stock alert email
+
+---
+
 ## Session — 2026-03-27/28 (Emails page + Bosta login fix)
 
 ### What Was Done

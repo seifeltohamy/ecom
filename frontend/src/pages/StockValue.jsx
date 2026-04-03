@@ -16,6 +16,9 @@ export default function StockValue() {
   const [sort,         setSort]         = useState({ key: null, dir: 'asc' });
   const [purchasePrices, setPurchasePrices] = useState({});
   const savingRef = useRef({});
+  const [source,           setSource]           = useState('auto');
+  const [activeSource,     setActiveSource]     = useState('');
+  const [availableSources, setAvailableSources] = useState([]);
 
   const toggleSort = (key) => setSort(s => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }));
 
@@ -29,7 +32,7 @@ export default function StockValue() {
     setLoading(true);
     setError('');
     const [stockRes, bosRes] = await Promise.all([
-      authFetch('/stock-value'),
+      authFetch(`/stock-value?source=${source}`),
       authFetch('/dashboard/bosta-summary'),
     ]);
     if (!stockRes.ok) {
@@ -40,6 +43,8 @@ export default function StockValue() {
     }
     const data = await stockRes.json();
     setRows(data.rows || []);
+    setActiveSource(data.source || '');
+    setAvailableSources(data.available_sources || []);
     setTotals({
       total_onhand:         data.total_onhand,
       total_consumer_value: data.total_consumer_value,
@@ -61,7 +66,7 @@ export default function StockValue() {
     }
 
     setLoading(false);
-  }, []);
+  }, [source]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -138,7 +143,16 @@ export default function StockValue() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '.6rem', marginBottom: '1rem', alignItems: 'center' }}>
+        {availableSources.length > 1 && (
+          <select
+            value={source}
+            onChange={e => setSource(e.target.value)}
+            style={{ padding: '.45rem .7rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border2)', background: 'var(--surface2)', color: 'var(--text)', fontSize: '.85rem', cursor: 'pointer' }}
+          >
+            {availableSources.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+          </select>
+        )}
         <Btn onClick={load} disabled={loading}>
           {loading ? 'Loading…' : '↺ Refresh'}
         </Btn>
@@ -147,14 +161,16 @@ export default function StockValue() {
       {error && (
         <Alert type="error">
           {error}
-          {error.includes('API key') && (
-            <span> Go to <a href="/settings" style={{ color: 'var(--accent)' }}>Settings</a> to add it.</span>
+          {(error.includes('API key') || error.includes('configured')) && (
+            <span> Go to <a href="/settings" style={{ color: 'var(--accent)' }}>Settings</a> to set it up.</span>
           )}
         </Alert>
       )}
 
       <Card>
-        <CardTitle>Products — live from Bosta</CardTitle>
+        <CardTitle>
+          Products — live from {activeSource ? activeSource.charAt(0).toUpperCase() + activeSource.slice(1) : '…'}
+        </CardTitle>
 
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
