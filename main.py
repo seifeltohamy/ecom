@@ -27,6 +27,28 @@ INDEX_HTML  = DIST / "index.html"
 
 app = FastAPI(title="EcomHQ")
 
+
+# ── SPA page paths that conflict with API route paths ────────────────────────
+# When a browser navigates directly to one of these (full page load, Accept: text/html),
+# we must serve index.html — otherwise the API route handler runs and returns 401
+# because the browser's navigation request has no Authorization header.
+_SPA_PAGE_PATHS = {
+    "/settings", "/stock-value", "/products-sold", "/cashflow", "/products",
+    "/categories", "/admin", "/bosta", "/analytics", "/bi", "/todo", "/emails",
+    "/users", "/home",
+}
+
+@app.middleware("http")
+async def spa_html_navigation_middleware(request, call_next):
+    if request.method == "GET":
+        path = request.url.path
+        accept = request.headers.get("accept", "")
+        is_html_nav = "text/html" in accept
+        is_spa_path = path in _SPA_PAGE_PATHS or any(path.startswith(p + "/") for p in _SPA_PAGE_PATHS)
+        if is_html_nav and is_spa_path and INDEX_HTML.exists():
+            return _FileResponse(str(INDEX_HTML))
+    return await call_next(request)
+
 # ── Scheduler — only one worker should run it (file lock prevents duplicates) ──
 _scheduler = None
 _scheduler_lock_fh = None
