@@ -181,7 +181,9 @@ def meta_summary(
         spend_data   = meta_client.get_spend_summary(token, account_id, date_from, date_to)
         balance_data = meta_client.compute_meta_balance(brand_id, month_name=month)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Meta API error: {str(e)}")
+        import re
+        msg = re.sub(r"access_token=[^&\s'\"]+", "access_token=***", str(e))
+        raise HTTPException(status_code=502, detail=msg)
 
     return {
         "connected": True,

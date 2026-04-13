@@ -72,6 +72,20 @@ def get_ad_accounts(access_token: str) -> list:
 
 # ── Insights ──────────────────────────────────────────────────────────────────
 
+def _meta_error_message(r: httpx.Response) -> str:
+    """Extract a clean Facebook error message from a response, never including the access token."""
+    try:
+        err = r.json().get("error", {})
+        msg = err.get("message") or err.get("error_user_msg") or f"HTTP {r.status_code}"
+        code = err.get("code")
+        sub = err.get("error_subcode")
+        if code in (190, 102) or sub in (463, 467):
+            return "Meta access token expired. Please reconnect Meta Ads in Settings."
+        return f"Meta API: {msg}"
+    except Exception:
+        return f"Meta API returned HTTP {r.status_code}"
+
+
 def get_spend_summary(access_token: str, ad_account_id: str,
                       date_from: str, date_to: str) -> dict:
     """Return {spend, currency} for the given date range at account level."""
@@ -86,7 +100,8 @@ def get_spend_summary(access_token: str, ad_account_id: str,
         },
         timeout=15,
     )
-    r.raise_for_status()
+    if r.status_code != 200:
+        raise ValueError(_meta_error_message(r))
     rows = r.json().get("data", [])
     row  = rows[0] if rows else {}
     return {
@@ -224,7 +239,8 @@ def get_campaigns(access_token: str, ad_account_id: str,
         },
         timeout=15,
     )
-    r.raise_for_status()
+    if r.status_code != 200:
+        raise ValueError(_meta_error_message(r))
     insights = r.json().get("data", [])
     rows = []
     for row in insights:
