@@ -173,12 +173,11 @@ def meta_summary(
     if not token or not account_id:
         return {"connected": False, "spend": 0, "balance": 0, "currency": "EGP"}
 
-    if month:
-        date_from, date_to = meta_client._month_name_to_range(month)
-    elif not date_from or not date_to:
-        date_from, date_to = _current_month_range()
-
     try:
+        if month:
+            date_from, date_to = meta_client._month_name_to_range(month)
+        elif not date_from or not date_to:
+            date_from, date_to = _current_month_range()
         spend_data   = meta_client.get_spend_summary(token, account_id, date_from, date_to)
         balance_data = meta_client.compute_meta_balance(brand_id, month_name=month)
     except Exception as e:

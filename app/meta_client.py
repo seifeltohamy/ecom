@@ -108,17 +108,24 @@ def _usd_to_egp_rate() -> float:
 
 
 def _month_name_to_range(month_name: str) -> tuple[str, str]:
-    """Convert 'Apr 2026' or 'April 2026' to ('2026-04-01', '2026-04-30'), capped at today."""
+    """Convert 'Apr 2026' or 'April 2026' to ('2026-04-01', '2026-04-30'), capped at today.
+    Lenient: strips whitespace and tries title-cased variant ('april 2026' → 'April 2026')."""
     import calendar
     from datetime import datetime, date
-    for fmt in ("%d %b %Y", "%d %B %Y"):
-        try:
-            dt = datetime.strptime(f"1 {month_name}", fmt)
+    cleaned = (month_name or "").strip()
+    candidates = [cleaned, cleaned.title()]
+    dt = None
+    for candidate in candidates:
+        for fmt in ("%d %b %Y", "%d %B %Y"):
+            try:
+                dt = datetime.strptime(f"1 {candidate}", fmt)
+                break
+            except ValueError:
+                continue
+        if dt:
             break
-        except ValueError:
-            continue
-    else:
-        raise ValueError(f"Cannot parse month name: {month_name}")
+    if not dt:
+        raise ValueError(f"Cannot parse month name: {month_name!r}")
     first = dt.date()
     last_day = calendar.monthrange(first.year, first.month)[1]
     last = date(first.year, first.month, last_day)

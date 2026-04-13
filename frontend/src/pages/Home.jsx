@@ -85,10 +85,20 @@ export default function Home() {
       .then(r => r.json())
       .then(d => { setSummary(d); setLoading(false); })
       .catch(() => setLoading(false));
+    setMetaData(null);
     authFetch(`/meta/summary?month=${encodeURIComponent(selectedMonth)}`)
-      .then(r => r.json())
-      .then(d => setMetaData(d?.connected ? d : false))
-      .catch(() => setMetaData(false));
+      .then(async r => {
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          return { error: j.detail || `HTTP ${r.status}` };
+        }
+        return r.json();
+      })
+      .then(d => {
+        if (d?.error) setMetaData({ error: d.error });
+        else setMetaData(d?.connected ? d : false);
+      })
+      .catch(e => setMetaData({ error: e.message || 'Network error' }));
   }, [selectedMonth]);
 
 
@@ -129,14 +139,27 @@ export default function Home() {
           </div>
 
           {/* Meta Ads */}
-          {metaData && (
-            <>
-              <SectionLabel>Meta Ads — {selectedMonth}</SectionLabel>
-              <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
-                <KpiCard label="Ad Spend This Month" value={metaData.spend}   color={C.meta}    sub="Facebook & Instagram" />
-                <KpiCard label="Balance Remaining"   value={metaData.balance} color={C.balance} sub="Available ad budget" />
-              </div>
-            </>
+          <SectionLabel>Meta Ads — {selectedMonth}</SectionLabel>
+          {metaData === null && (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <Alert type="loading">Loading Meta Ads data…</Alert>
+            </div>
+          )}
+          {metaData === false && (
+            <div style={{ marginBottom: '1.25rem', padding: '1rem 1.25rem', background: 'var(--surface)', border: '1px dashed var(--border2)', borderRadius: 'var(--radius)', color: 'var(--muted)', fontSize: '.85rem' }}>
+              Meta Ads is not connected for this brand. <a href="/settings" style={{ color: 'var(--accent)' }}>Connect in Settings →</a>
+            </div>
+          )}
+          {metaData?.error && (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <Alert type="error">Meta Ads error: {metaData.error}</Alert>
+            </div>
+          )}
+          {metaData && !metaData.error && metaData.connected && (
+            <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+              <KpiCard label="Ad Spend This Month" value={metaData.spend}   color={C.meta}    sub="Facebook & Instagram" />
+              <KpiCard label="Balance Remaining"   value={metaData.balance} color={C.balance} sub="Available ad budget" />
+            </div>
           )}
 
           {/* Last report */}

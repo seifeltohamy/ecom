@@ -297,11 +297,13 @@ def trigger_meta_balance_alert(
     brand_id: int = Depends(get_brand_id),
     _admin: models.User = Depends(require_admin),
 ):
-    """Manually fire the Meta Ads balance alert for the current brand only."""
+    """Manually fire the Meta Ads balance alert for the current brand only.
+    Returns per-brand outcome dict with balance, threshold, recipient, status, reason."""
     from app.meta_balance_alert import run_meta_balance_alert_job
     try:
-        run_meta_balance_alert_job(force=True, brand_id_filter=brand_id)
-        return {"ok": True}
+        outcomes = run_meta_balance_alert_job(force=True, brand_id_filter=brand_id)
+        outcome = outcomes[0] if outcomes else None
+        return {"ok": True, "outcome": outcome}
     except Exception as exc:
         raise HTTPException(500, str(exc))
 

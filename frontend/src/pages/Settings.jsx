@@ -328,11 +328,32 @@ export default function Settings() {
   async function testMetaAlert() {
     setTestingMeta(true);
     setMetaMsg(null);
-    const res = await authFetch('/settings/trigger-meta-balance-alert', { method: 'POST' });
-    setTestingMeta(false);
-    setMetaMsg(res.ok
-      ? { type: 'success', text: 'Test alert sent — check your email.' }
-      : { type: 'error',   text: 'Failed to trigger test alert.' });
+    try {
+      const res = await authFetch('/settings/trigger-meta-balance-alert', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      setTestingMeta(false);
+      if (!res.ok) {
+        setMetaMsg({ type: 'error', text: data.detail || 'Failed to trigger test alert.' });
+        return;
+      }
+      const o = data.outcome;
+      if (!o) {
+        setMetaMsg({ type: 'error', text: 'No outcome returned (brand not found).' });
+        return;
+      }
+      const balanceStr = o.balance != null ? `${o.currency || 'EGP'} ${o.balance.toLocaleString()}` : 'n/a';
+      const thresholdStr = o.threshold != null ? `${o.currency || 'EGP'} ${o.threshold.toLocaleString()}` : 'n/a';
+      if (o.status === 'sent') {
+        setMetaMsg({ type: 'success', text: `Sent to ${o.recipient} — balance ${balanceStr} (threshold ${thresholdStr})` });
+      } else if (o.status === 'skipped') {
+        setMetaMsg({ type: 'error', text: `Skipped: ${o.reason}` });
+      } else {
+        setMetaMsg({ type: 'error', text: `Error: ${o.reason}` });
+      }
+    } catch (e) {
+      setTestingMeta(false);
+      setMetaMsg({ type: 'error', text: e.message || 'Network error' });
+    }
   }
 
   async function saveAlert() {

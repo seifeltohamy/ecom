@@ -51,49 +51,77 @@ def _build_balance_alert_html(brand_name: str, balance: float, threshold: float,
 
 
 def run_meta_balance_alert_job(force: bool = False, brand_id_filter: int | None = None):
-    """Check Meta Ads balance for all brands (or one brand) and send alert if below threshold."""
+    """Check Meta Ads balance for all brands (or one brand) and send alert if below threshold.
+    Returns list of per-brand outcome dicts."""
     logger.info("Meta balance alert job running (force=%s, brand_filter=%s)", force, brand_id_filter)
 
+    outcomes = []
     brands = _get_all_brands()
     if brand_id_filter is not None:
         brands = [b for b in brands if b["brand_id"] == brand_id_filter]
     for brand in brands:
         brand_id   = brand["brand_id"]
         brand_name = brand["brand_name"]
+        outcome = {
+            "brand_id":   brand_id,
+            "brand_name": brand_name,
+            "balance":    None,
+            "threshold":  None,
+            "recipient":  None,
+            "status":     "skipped",
+            "reason":     "",
+        }
         try:
             settings   = _get_brand_settings(brand_id)
             token      = settings.get("meta_access_token", "")
             account_id = settings.get("meta_ad_account_id", "")
             email    = settings.get("bosta_email", "")
             password = settings.get("bosta_email_password", "")
+            outcome["recipient"] = email
 
             if not token or not account_id:
+                outcome["reason"] = "Meta not connected"
                 logger.debug("Brand %s (%s): Meta not connected, skipping", brand_id, brand_name)
+                outcomes.append(outcome)
                 continue
             if not email:
+                outcome["reason"] = "No recipient email (bosta_email empty)"
                 logger.debug("Brand %s (%s): no recipient email configured, skipping", brand_id, brand_name)
+                outcomes.append(outcome)
                 continue
 
             try:
                 threshold = float(settings.get("meta_balance_threshold", "5000"))
             except (ValueError, TypeError):
                 threshold = 5000.0
+            outcome["threshold"] = threshold
 
             balance_data = compute_meta_balance(brand_id)
             balance      = balance_data["balance"]
             currency     = balance_data.get("currency", "EGP")
+            outcome["balance"] = balance
+            outcome["currency"] = currency
 
             if balance <= threshold or force:
                 subject = f"⚠️ Meta Ads Low Balance — {currency} {balance:,.2f} remaining ({brand_name})"
                 html    = _build_balance_alert_html(brand_name, balance, threshold, currency)
                 _send_email(email, password, subject, html)
+                outcome["status"] = "sent"
+                outcome["reason"] = f"Balance {balance:,.2f} {'forced' if force else f'≤ threshold {threshold:,.2f}'}"
                 logger.info("Brand %s (%s): balance alert sent — %.2f %s (threshold %.2f)",
                             brand_id, brand_name, balance, currency, threshold)
             else:
+                outcome["status"] = "skipped"
+                outcome["reason"] = f"Balance {balance:,.2f} above threshold {threshold:,.2f}"
                 logger.info("Brand %s (%s): balance %.2f %s OK (threshold %.2f)",
                             brand_id, brand_name, balance, currency, threshold)
 
         except Exception as exc:
+            outcome["status"] = "error"
+            outcome["reason"] = str(exc)
             logger.error("Brand %s (%s): error — %s", brand_id, brand_name, exc, exc_info=True)
 
-    logger.info("Meta balance alert job finished")
+        outcomes.append(outcome)
+
+    logger.info("Meta balance alert job finished — %d brands processed", len(outcomes))
+    return outcomes
