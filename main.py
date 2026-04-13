@@ -46,7 +46,10 @@ async def spa_html_navigation_middleware(request, call_next):
         is_html_nav = "text/html" in accept
         is_spa_path = path in _SPA_PAGE_PATHS or any(path.startswith(p + "/") for p in _SPA_PAGE_PATHS)
         if is_html_nav and is_spa_path and INDEX_HTML.exists():
-            return _FileResponse(str(INDEX_HTML))
+            return _FileResponse(
+                str(INDEX_HTML),
+                headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Vary": "Accept"},
+            )
     return await call_next(request)
 
 # ── Scheduler — only one worker should run it (file lock prevents duplicates) ──
@@ -105,7 +108,10 @@ if DIST.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str = ""):  # noqa: ARG001
-        return _FileResponse(str(INDEX_HTML))
+        return _FileResponse(
+            str(INDEX_HTML),
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Vary": "Accept"},
+        )
 else:
     @app.get("/", response_class=HTMLResponse)
     def serve_dev():
