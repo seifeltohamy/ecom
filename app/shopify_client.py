@@ -17,17 +17,34 @@ def get_inventory(store_url: str, access_token: str) -> list[dict]:
       product_code, name, list_price, qty_available, virtual_available
     """
     store = store_url.strip().rstrip("/")
-    if not store.startswith("http"):
-        store = f"https://{store}"
+    if store.startswith("http://") or store.startswith("https://"):
+        store = store.split("://", 1)[1]
+    if "/" in store:
+        store = store.split("/", 1)[0]
+    if not store.endswith(".myshopify.com"):
+        raise ValueError(
+            f"Invalid Shopify store URL: '{store_url}'. "
+            "Must be your store's .myshopify.com domain (e.g. 'mystore.myshopify.com'), "
+            "not the Partner Dashboard or a custom domain."
+        )
+    store = f"https://{store}"
 
     headers = {"X-Shopify-Access-Token": access_token}
     products: list[dict] = []
     url = f"{store}/admin/api/{API_VERSION}/products.json?limit=250"
 
     while url:
-        resp = httpx.get(url, headers=headers, timeout=20, follow_redirects=True)
+        try:
+            resp = httpx.get(url, headers=headers, timeout=20, follow_redirects=True)
+        except httpx.ConnectError as e:
+            raise ValueError(
+                f"Could not reach Shopify store '{store}'. "
+                "Check the Store URL in Settings — it should be like 'mystore.myshopify.com'."
+            ) from e
         if resp.status_code == 401:
-            raise ValueError("Shopify authentication failed. Check your access token.")
+            raise ValueError("Shopify authentication failed. Check your Admin API access token (starts with 'shpat_').")
+        if resp.status_code == 404:
+            raise ValueError(f"Shopify store '{store}' not found. Verify the store URL.")
         if resp.status_code != 200:
             raise ValueError(f"Shopify API returned {resp.status_code}: {resp.text[:300]}")
 
