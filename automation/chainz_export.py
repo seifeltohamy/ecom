@@ -81,34 +81,35 @@ def fetch_chainz_email(gmail_user: str, gmail_pass: str, timeout: int = 300) -> 
     """Poll Gmail IMAP for Chainz export email with .xlsx attachment.
     Returns path to saved attachment."""
     deadline = time.time() + timeout
+    since_str = datetime.now().strftime("%d-%b-%Y")
     while time.time() < deadline:
         try:
             mail = imaplib.IMAP4_SSL("imap.gmail.com")
             mail.login(gmail_user, gmail_pass)
             mail.select('"[Gmail]/All Mail"')
 
-            # Search for recent Chainz emails
-            _, data = mail.search(None,
-                '(OR (FROM "chainzsolutions.com") (FROM "mapquest.com") SUBJECT "Orders Excel Report" SINCE "' +
-                (datetime.now().strftime("%d-%b-%Y")) + '")')
+            # Search for recent emails with "Orders Excel Report" in subject
+            # (covers "Orders Excel Report - Zen", "Orders Excel Report - BrandName", etc.)
+            _, data = mail.search(None, f'SUBJECT "Orders Excel Report" SINCE "{since_str}"')
 
             ids = data[0].split()
             if ids:
-                # Get the most recent one
-                _, msg_data = mail.fetch(ids[-1], "(RFC822)")
-                msg = email_lib.message_from_bytes(msg_data[0][1])
+                # Check from most recent first
+                for eid in reversed(ids):
+                    _, msg_data = mail.fetch(eid, "(RFC822)")
+                    msg = email_lib.message_from_bytes(msg_data[0][1])
 
-                # Look for .xlsx attachment
-                for part in msg.walk():
-                    filename = part.get_filename()
-                    if filename and filename.endswith(".xlsx"):
-                        tmp = tempfile.mkdtemp()
-                        path = os.path.join(tmp, filename)
-                        with open(path, "wb") as f:
-                            f.write(part.get_payload(decode=True))
-                        mail.logout()
-                        log.info("Chainz export attachment saved: %s", path)
-                        return path
+                    # Look for .xlsx attachment
+                    for part in msg.walk():
+                        filename = part.get_filename()
+                        if filename and filename.endswith(".xlsx"):
+                            tmp = tempfile.mkdtemp()
+                            path = os.path.join(tmp, filename)
+                            with open(path, "wb") as f:
+                                f.write(part.get_payload(decode=True))
+                            mail.logout()
+                            log.info("Chainz export attachment saved: %s", path)
+                            return path
 
             mail.logout()
         except Exception as e:
