@@ -77,6 +77,12 @@
 - [x] Current Meta Balance override — Settings field sets exact balance; future Ads entries add on top; allows negative values
 - [x] Suggestion accept defaults to active month — no more blank month dropdown
 - [x] Date format standardized — DD/MM zero-padded across backend and frontend
+- [x] Meta API error sanitization — clean error messages, never leak access token, detect token expiry with helpful reconnect message
+- [x] Meta Dashboard error surfacing — loading/not-connected/error states instead of silently hiding Meta cards
+- [x] Meta balance alert diagnostics — per-brand outcome dicts (balance, threshold, recipient, status, reason); Test button shows details
+- [x] SPA routing fix — middleware serves index.html for browser navigation to /settings, /stock-value, etc.; no-cache headers prevent fetch conflicts
+- [x] Shopify inventory integration — Settings card with store URL + token; Stock Value source dropdown; inventory_source persisted per brand; .myshopify.com validation; cursor pagination
+- [x] Shopify setup instructions — collapsible guide in Settings showing how to get Admin API access token from store admin
 
 ## In Progress
 

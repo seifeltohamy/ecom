@@ -16,7 +16,7 @@ const inputStyle = {
  * Phase 2 (ready):     shows date range pickers + Upload button.
  * Props: onDone(reportData), onClose
  */
-export default function AutomateModal({ onDone, onClose }) {
+export default function AutomateModal({ onDone, onClose, provider = 'bosta' }) {
   const [phase,    setPhase]    = useState('streaming');
   const [logs,     setLogs]     = useState([]);
   const [fileId,   setFileId]   = useState('');
@@ -34,7 +34,8 @@ export default function AutomateModal({ onDone, onClose }) {
     (async () => {
       let res;
       try {
-        res = await fetch('/automation/run-export', {
+        const sseUrl = provider === 'chainz' ? '/automation/run-chainz-export' : '/automation/run-export';
+        res = await fetch(sseUrl, {
           headers: { Authorization: `Bearer ${getToken()}` },
           signal: ctrl.signal,
         });

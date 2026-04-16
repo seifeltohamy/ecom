@@ -24,6 +24,9 @@ class SettingsUpdate(BaseModel):
     shopify_store_url:         str | None = None
     shopify_access_token:      str | None = None
     inventory_source:          str | None = None
+    chainz_email:              str | None = None
+    chainz_password:           str | None = None
+    fulfillment_provider:      str | None = None
 
 
 @router.get("/settings")
@@ -50,10 +53,13 @@ def get_settings(brand_id: int = Depends(get_brand_id), _user: models.User = Dep
         "shopify_store_url":        data.get("shopify_store_url", ""),
         "shopify_access_token":     data.get("shopify_access_token", ""),
         "inventory_source":         data.get("inventory_source", "auto"),
+        "chainz_email":             data.get("chainz_email", ""),
+        "chainz_password":          data.get("chainz_password", ""),
+        "fulfillment_provider":     data.get("fulfillment_provider", "bosta"),
     }
 
 
-_CREDENTIAL_KEYS = {"bosta_api_key", "bosta_email", "bosta_password", "bosta_email_password", "shopify_access_token"}
+_CREDENTIAL_KEYS = {"bosta_api_key", "bosta_email", "bosta_password", "bosta_email_password", "shopify_access_token", "chainz_email", "chainz_password"}
 
 @router.put("/settings")
 def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_id), _admin: models.User = Depends(require_admin)):
@@ -73,6 +79,9 @@ def update_settings(payload: SettingsUpdate, brand_id: int = Depends(get_brand_i
         "shopify_store_url":      payload.shopify_store_url,
         "shopify_access_token":   payload.shopify_access_token,
         "inventory_source":       payload.inventory_source,
+        "chainz_email":           payload.chainz_email,
+        "chainz_password":        payload.chainz_password,
+        "fulfillment_provider":   payload.fulfillment_provider,
     }
     updates = {k: v for k, v in raw.items() if v is not None and not (k in _CREDENTIAL_KEYS and v == "")}
 

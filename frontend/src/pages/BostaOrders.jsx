@@ -21,6 +21,9 @@ const tdPl     = { padding: '.45rem .75rem', borderBottom: '1px solid var(--bord
 const tdPlLeft = { ...tdPl, textAlign: 'left' };
 
 export default function BostaOrders() {
+  // ── Fulfillment provider toggle ─────────────────────────────────────────────
+  const [provider, setProvider] = useState('bosta');
+
   // ── Upload state ───────────────────────────────────────────────────────────
   const [file,    setFile]    = useState(null);
   const [status,  setStatus]  = useState(null);
@@ -215,6 +218,11 @@ export default function BostaOrders() {
   }, []);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => {
+    authFetch('/settings').then(r => r.json()).then(d => {
+      if (d.fulfillment_provider) setProvider(d.fulfillment_provider);
+    }).catch(() => {});
+  }, []);
 
   // Phase 1: upload file → detect date range
   const upload = async () => {
@@ -223,6 +231,7 @@ export default function BostaOrders() {
     setStatus({ type: 'loading', msg: 'Sorting rows…' });
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('provider', provider);
     try {
       const res  = await authFetch('/upload/prepare', { method: 'POST', body: fd });
       const data = await res.json();
@@ -344,8 +353,35 @@ export default function BostaOrders() {
         />
       )}
 
+      {/* Provider toggle */}
+      <div style={{ display: 'flex', gap: '.5rem', marginBottom: '1rem' }}>
+        {['bosta', 'chainz'].map(p => (
+          <button
+            key={p}
+            onClick={() => {
+              setProvider(p);
+              authFetch('/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fulfillment_provider: p }),
+              });
+            }}
+            style={{
+              padding: '.5rem 1.25rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+              border: provider === p ? '1px solid var(--accent)' : '1px solid var(--border2)',
+              background: provider === p ? 'var(--accent)' : 'transparent',
+              color: provider === p ? '#fff' : 'var(--muted)',
+              fontWeight: 600, fontSize: '.85rem', transition: 'all .15s',
+            }}
+          >
+            {p.charAt(0).toUpperCase() + p.slice(1)}
+          </button>
+        ))}
+      </div>
+
       {automateOpen && (
         <AutomateModal
+          provider={provider}
           onDone={data => { setReport(data); loadHistory(); setAutomateOpen(false); }}
           onClose={() => setAutomateOpen(false)}
         />
@@ -388,7 +424,9 @@ export default function BostaOrders() {
             <Btn disabled={!file || loading} onClick={upload}>
               {loading ? <><Spinner size={13} /> Sorting…</> : 'Run Report'}
             </Btn>
-            <Btn variant="outline" onClick={() => setAutomateOpen(true)}>Automate Export</Btn>
+            <Btn variant="outline" onClick={() => setAutomateOpen(true)}>
+              Automate {provider === 'chainz' ? 'Chainz' : 'Bosta'} Export
+            </Btn>
             {report && <Btn variant="outline" onClick={clear}>Clear</Btn>}
           </div>
         )}

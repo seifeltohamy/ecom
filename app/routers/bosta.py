@@ -131,6 +131,100 @@ def aggregate_excel(workbook, date_from: str = None, date_to: str = None) -> dic
     return sku_data, order_count
 
 
+def parse_chainz_items(items_str: str) -> list[tuple[str, int]]:
+    """Parse Chainz Items column: 'Zen-1011: 1 pcs, Zen-1010: 3 pcs' → [(sku, qty), ...]"""
+    if not items_str:
+        return []
+    return [(m.group(1), int(m.group(2))) for m in re.finditer(r"(\S+?):\s*(\d+)\s*pcs", str(items_str))]
+
+
+def aggregate_chainz_excel(workbook, date_from: str = None, date_to: str = None,
+                           price_lookup: dict = None) -> tuple[dict, int]:
+    """Parse Chainz Excel into same sku_data shape as Bosta.
+
+    price_lookup: {order_name: {sku: price}} from Shopify API.
+    If an order isn't in the lookup, fallback to COD / total_items.
+    """
+    from datetime import datetime, date
+
+    ws = workbook.active
+    headers = [str(cell.value or "").strip() for cell in ws[1]]
+
+    def col(name):
+        try:
+            return headers.index(name)
+        except ValueError:
+            return None
+
+    ordered_at_idx = col("Ordered At")
+    status_idx = col("Status")
+    items_idx = col("Items")
+    order_num_idx = col("Shopify Number") or col("Shopify Order #")
+    total_items_idx = col("Total Items")
+    cod_idx = col("COD")
+
+    if items_idx is None:
+        raise HTTPException(status_code=400, detail="No 'Items' column found in Chainz Excel.")
+
+    dt_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else None
+    dt_to = datetime.strptime(date_to, "%Y-%m-%d").date() if date_to else None
+
+    sku_data = defaultdict(lambda: defaultdict(lambda: {"quantity": 0, "total": 0.0}))
+    order_count = 0
+    price_lookup = price_lookup or {}
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        # Filter by Delivered status
+        if status_idx is not None:
+            status = str(row[status_idx] or "").strip()
+            if status != "Delivered":
+                continue
+
+        # Date filtering on "Ordered At"
+        if ordered_at_idx is not None and (dt_from or dt_to):
+            raw = row[ordered_at_idx]
+            if raw is None:
+                continue
+            if isinstance(raw, (datetime, date)):
+                row_date = raw.date() if isinstance(raw, datetime) else raw
+            else:
+                raw_str = str(raw).strip()
+                parsed = None
+                for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                    try:
+                        parsed = datetime.strptime(raw_str, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                if parsed is None:
+                    continue
+                row_date = parsed
+            if dt_from and row_date < dt_from:
+                continue
+            if dt_to and row_date > dt_to:
+                continue
+
+        items = parse_chainz_items(row[items_idx] if items_idx is not None else "")
+        if not items:
+            continue
+
+        order_count += 1
+        order_name = str(row[order_num_idx] or "").strip() if order_num_idx is not None else ""
+        order_prices = price_lookup.get(order_name, {})
+
+        # Fallback: COD / total_items if order not in Shopify lookup
+        cod = float(row[cod_idx] or 0) if cod_idx is not None else 0
+        total_items_val = int(row[total_items_idx] or 0) if total_items_idx is not None else 0
+        fallback_price = (cod / total_items_val) if total_items_val > 0 else 0
+
+        for sku, qty in items:
+            price = order_prices.get(sku, fallback_price)
+            sku_data[sku][price]["quantity"] += qty
+            sku_data[sku][price]["total"] += qty * price
+
+    return sku_data, order_count
+
+
 def build_report(sku_data: dict, products: dict, order_count: int = 0) -> dict:
     rows = []
     grand_qty = 0
@@ -176,10 +270,46 @@ def build_report(sku_data: dict, products: dict, order_count: int = 0) -> dict:
     }
 
 
-async def _process_excel(contents: bytes, date_from: str | None, date_to: str | None, brand_id: int) -> dict:
+async def _process_excel(contents: bytes, date_from: str | None, date_to: str | None, brand_id: int, provider: str = "bosta") -> dict:
     """Core Excel processing logic shared by /upload and /automation/upload/{file_id}."""
     wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
-    sku_data, order_count = aggregate_excel(wb, date_from=date_from, date_to=date_to)
+
+    if provider == "chainz":
+        # Extract Shopify order names from Excel for price lookup
+        ws = wb.active
+        headers = [str(cell.value or "").strip() for cell in ws[1]]
+        order_num_idx = None
+        for name in ("Shopify Number", "Shopify Order #"):
+            if name in headers:
+                order_num_idx = headers.index(name)
+                break
+        order_names = set()
+        if order_num_idx is not None:
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                val = str(row[order_num_idx] or "").strip()
+                if val:
+                    order_names.add(val)
+
+        # Fetch prices from Shopify
+        price_lookup = {}
+        if order_names:
+            with get_db() as db:
+                settings = {r.key: r.value for r in db.query(models.AppSettings).filter(
+                    models.AppSettings.brand_id == brand_id).all()}
+            store_url = settings.get("shopify_store_url", "")
+            access_token = settings.get("shopify_access_token", "")
+            if store_url and access_token:
+                from app.shopify_client import get_orders_by_name
+                try:
+                    price_lookup = get_orders_by_name(store_url, access_token, list(order_names))
+                except Exception:
+                    pass  # fallback to COD / total_items
+
+        # Re-open workbook (iter_rows consumes read-only workbook)
+        wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+        sku_data, order_count = aggregate_chainz_excel(wb, date_from=date_from, date_to=date_to, price_lookup=price_lookup)
+    else:
+        sku_data, order_count = aggregate_excel(wb, date_from=date_from, date_to=date_to)
     with get_db() as db:
         products = get_products_map(db, brand_id)
     report = build_report(sku_data, products, order_count)
@@ -228,6 +358,7 @@ async def debug_upload(file: UploadFile = File(...)):
 @router.post("/upload/prepare")
 async def upload_prepare(
     file: UploadFile = File(...),
+    provider: str = Form("bosta"),
     brand_id: int = Depends(get_brand_id),
     _user: models.User = Depends(require_writable),
 ):
@@ -235,19 +366,49 @@ async def upload_prepare(
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Please upload an Excel file (.xlsx or .xls).")
     contents = await file.read()
-    import bosta_daily as bd
     tmp = tempfile.mkdtemp()
     path = os.path.join(tmp, "upload.xlsx")
     with open(path, "wb") as f:
         f.write(contents)
-    try:
-        out, date_from, date_to = bd.sort_only(path)
-    except Exception as e:
-        shutil.rmtree(tmp, ignore_errors=True)
-        raise HTTPException(status_code=400, detail=str(e))
+
+    if provider == "chainz":
+        # For Chainz, detect date range from "Ordered At" column
+        try:
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            ws = wb.active
+            headers = [str(cell.value or "").strip() for cell in ws[1]]
+            idx = headers.index("Ordered At") if "Ordered At" in headers else None
+            dates = []
+            if idx is not None:
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    raw = row[idx]
+                    if raw is None:
+                        continue
+                    if isinstance(raw, _dt):
+                        dates.append(raw.date())
+                    else:
+                        for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                            try:
+                                dates.append(_dt.strptime(str(raw).strip(), fmt).date())
+                                break
+                            except ValueError:
+                                continue
+            date_from = min(dates).strftime("%Y-%m-%d") if dates else None
+            date_to = max(dates).strftime("%Y-%m-%d") if dates else None
+        except Exception as e:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=str(e))
+    else:
+        try:
+            import bosta_daily as bd
+            path, date_from, date_to = bd.sort_only(path)
+        except Exception as e:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=str(e))
+
     fid = str(uuid.uuid4())
-    pending_exports[fid] = {"path": out, "tmp": tmp, "brand_id": brand_id,
-                            "date_from": date_from, "date_to": date_to}
+    _save_export(fid, {"path": path, "tmp": tmp, "brand_id": brand_id,
+                       "date_from": date_from, "date_to": date_to, "provider": provider})
     return {"file_id": fid, "date_from": date_from, "date_to": date_to}
 
 
@@ -256,13 +417,14 @@ async def upload_excel(
     file: UploadFile = File(...),
     date_from: str = Form(None),
     date_to:   str = Form(None),
+    provider:  str = Form("bosta"),
     brand_id: int = Depends(get_brand_id),
     _user: models.User = Depends(require_writable),
 ):
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Please upload an Excel file (.xlsx or .xls).")
     contents = await file.read()
-    report = await _process_excel(contents, date_from, date_to, brand_id)
+    report = await _process_excel(contents, date_from, date_to, brand_id, provider=provider)
     return JSONResponse(report)
 
 
@@ -460,6 +622,69 @@ def run_export_sse(
     )
 
 
+@router.get("/automation/run-chainz-export")
+def run_chainz_export_sse(
+    _user:    models.User = Depends(get_current_user),
+    brand_id: int = Depends(get_brand_id),
+):
+    """Stream Chainz export automation progress as SSE."""
+    with get_db() as db:
+        def _s(key):
+            r = db.query(models.AppSettings).filter_by(key=key, brand_id=brand_id).first()
+            return r.value if r else None
+        chainz_email = _s("chainz_email")
+        chainz_pass  = _s("chainz_password")
+        email_pass   = _s("bosta_email_password")
+        gmail_user   = _s("bosta_email")
+
+    if not all([chainz_email, chainz_pass]):
+        raise HTTPException(400, "Chainz portal credentials not configured in Settings")
+    if not all([gmail_user, email_pass]):
+        raise HTTPException(400, "Gmail IMAP credentials (Bosta Integration card) not configured in Settings")
+
+    q = queue.Queue()
+
+    def _run():
+        import chainz_export as ce
+        tmp = tempfile.mkdtemp()
+        try:
+            q.put("LOG:Logging in to Chainz portal…")
+            ce.trigger_chainz_export(chainz_email, chainz_pass)
+            q.put("LOG:Export triggered — waiting for email (up to 5 min)…")
+            path = ce.fetch_chainz_email(gmail_user, email_pass)
+            q.put("LOG:Attachment downloaded — sorting rows…")
+            out, date_from, date_to = ce.sort_chainz_excel(path)
+            fid = str(uuid.uuid4())
+            _save_export(fid, {
+                "path": out, "tmp": tmp, "brand_id": brand_id,
+                "date_from": date_from, "date_to": date_to,
+                "provider": "chainz",
+            })
+            q.put(f"READY:{fid}:{date_from}:{date_to}")
+        except Exception as e:
+            q.put(f"ERROR:{e}")
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+    def _stream():
+        while True:
+            try:
+                msg = q.get(timeout=15)
+            except queue.Empty:
+                yield ": keepalive\n\n"
+                continue
+            yield f"data: {msg}\n\n"
+            if msg.startswith("READY:") or msg.startswith("ERROR:"):
+                break
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 class AutomateUploadBody(BaseModel):
     date_from: str
     date_to:   str
@@ -481,10 +706,11 @@ async def automation_upload(
     try:
         with open(info["path"], "rb") as f:
             contents = f.read()
-        report = await _process_excel(contents, body.date_from, body.date_to, brand_id)
+        provider = info.get("provider", "bosta")
+        report = await _process_excel(contents, body.date_from, body.date_to, brand_id, provider=provider)
         return JSONResponse(report)
     finally:
-        shutil.rmtree(info["tmp"], ignore_errors=True)
+        shutil.rmtree(info.get("tmp", ""), ignore_errors=True)
 
 
 # ── SKU Cost Items ────────────────────────────────────────────────────────────

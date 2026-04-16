@@ -298,7 +298,8 @@
 
 ### GET /stock-value
 - **Auth:** Bearer (any role) + brand in JWT
-- **Source:** Bosta `GET /api/v2/products/fulfillment/list-products` (paginated, single call)
+- **Query param:** `source` (optional): `"bosta"` | `"shopify"` | `"auto"` (default). Auto uses saved `inventory_source` preference, then falls back to Bosta → Shopify → 400
+- **Source:** Bosta `GET /api/v2/products/fulfillment/list-products` or Shopify Admin API `GET /admin/api/2024-01/products.json`
 - **Response:**
   ```json
   {
@@ -320,11 +321,13 @@
     "total_consumer_value": 2500.0,
     "total_purchase_value": 1200.0,
     "capital_trapped": 0.0,
-    "report_days": 10
+    "report_days": 10,
+    "source": "bosta",
+    "available_sources": ["bosta", "shopify"]
   }
   ```
-- **Notes:** `units_sold`/`avg_daily_sales`/`days_remaining`/`sell_through` are null/0 when no Bosta report exists. `sell_through` = `units_sold / (units_sold + on_hand) * 100`. `capital_trapped` = purchase value of SKUs with sell_through < 20%.
-- **Errors:** 400 if no Bosta API key set; 502 if Bosta API unreachable or returns error
+- **Notes:** `units_sold`/`avg_daily_sales`/`days_remaining`/`sell_through` are null/0 when no Bosta report exists. `sell_through` = `units_sold / (units_sold + on_hand) * 100`. `capital_trapped` = purchase value of SKUs with sell_through < 20%. `source` indicates which provider was used. `available_sources` lists configured providers.
+- **Errors:** 400 if no provider configured; 502 if provider API unreachable or returns error
 
 ### PUT /stock-value/purchase-price
 - **Auth:** Bearer (any role) + brand in JWT

@@ -3,6 +3,52 @@
 
 ---
 
+## Session — 2026-04-13/16 (Meta error surfacing + SPA routing + Shopify integration)
+
+### What Was Done
+
+**Meta API error sanitization + token expiry detection:**
+- `_meta_error_message` helper in `meta_client.py` extracts clean Facebook error from response, never including the access token in error messages
+- `get_spend_summary` + `get_campaigns`: raise ValueError with sanitized message instead of `httpx.raise_for_status()` (which leaked the full URL + token)
+- Detects token expiry (codes 190/102, subcodes 463/467) → shows "Meta access token expired. Please reconnect Meta Ads in Settings."
+- Route handler regex-strips `access_token=...` from any error as defense-in-depth
+- Commits: `6c8256d`
+
+**Meta Dashboard error surfacing:**
+- Moved `_month_name_to_range` inside try/except in `meta.py` — parse errors return clean 502 instead of uncaught 500
+- `_month_name_to_range` now lenient: strips whitespace, tries `.title()` variant (handles "april 2026", "APR 2026")
+- `Home.jsx`: Meta Ads section always renders with loading / "not connected" link / error alert / KPI cards — no more silent hiding
+- Commits: `18d8dca`
+
+**Meta balance alert diagnostics:**
+- `run_meta_balance_alert_job` returns per-brand outcome dicts: `brand_id`, `brand_name`, `balance`, `threshold`, `recipient`, `status` (sent/skipped/error), `reason`
+- `trigger-meta-balance-alert` endpoint passes outcome to frontend
+- Settings "Test" button shows: "Sent to admin@zen.com — balance EGP 1,234 (threshold 5,000)" or skip/error reason
+- Commits: `18d8dca`
+
+**SPA routing fix — "Not authenticated" on page refresh:**
+- Added `spa_html_navigation_middleware` in `main.py` — intercepts GET requests with `Accept: text/html` matching SPA page paths (`/settings`, `/stock-value`, `/cashflow`, etc.) and serves `index.html`
+- `Cache-Control: no-store` + `Vary: Accept` headers prevent browser from caching HTML response and serving it to API fetches
+- Fixes: `/settings`, `/stock-value`, `/products-sold`, `/cashflow`, `/admin`, `/analytics` etc. all load correctly on direct navigation / refresh
+- Commits: `d218491`, `7ec0d63`
+
+**Shopify inventory integration:**
+- `app/shopify_client.py` (new): fetches products/variants from Shopify Admin API with cursor pagination
+- Validates `.myshopify.com` domain, catches DNS errors, distinguishes 401/404 with helpful messages
+- `GET /stock-value` accepts `?source=bosta|shopify|auto` — response includes `source` + `available_sources`
+- `inventory_source` preference saved per brand in `app_settings`
+- `Settings.jsx`: Shopify Integration card with store URL, access token (show/hide), collapsible setup instructions
+- `StockValue.jsx`: provider dropdown, re-fetches on source change, persists preference
+- Commits: `4c39b3e`, `d36b309`, `62b5b26`
+
+### Pending
+- Shopify token setup: user needs to re-install Dev Dashboard app with `read_products` + `read_inventory` scopes approved, then paste new `shpat_` token
+- Password change for users
+- Cashflow CSV export
+- Reconnect Meta Ads (token expired)
+
+---
+
 ## Session — 2026-04-01/02 (Live Wallet + Meta per-month + Settings fix)
 
 ### What Was Done
