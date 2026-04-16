@@ -645,9 +645,9 @@ def run_chainz_export_sse(
     q = queue.Queue()
 
     def _run():
-        import chainz_export as ce
         tmp = tempfile.mkdtemp()
         try:
+            import chainz_export as ce
             q.put("LOG:Logging in to Chainz portal…")
             ce.trigger_chainz_export(chainz_email, chainz_pass)
             q.put("LOG:Export triggered — waiting for email (up to 5 min)…")
