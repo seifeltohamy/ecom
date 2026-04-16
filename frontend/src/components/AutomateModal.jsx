@@ -139,7 +139,7 @@ export default function AutomateModal({ onDone, onClose, provider = 'bosta' }) {
           {phase === 'ready'     ? '✓ Export ready — confirm date range' :
            phase === 'uploading' ? 'Uploading report…' :
            phase === 'error'     ? 'Automation failed' :
-           'Automating Bosta Export'}
+           `Automating ${provider === 'chainz' ? 'Chainz' : 'Bosta'} Export`}
         </div>
 
         {/* Streaming phase — log lines */}

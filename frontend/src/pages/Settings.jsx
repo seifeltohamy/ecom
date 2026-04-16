@@ -75,8 +75,6 @@ export default function Settings() {
   const [showChainzPass,     setShowChainzPass]     = useState(false);
   const [savingChainz,       setSavingChainz]       = useState(false);
   const [chainzMsg,          setChainzMsg]          = useState(null);
-  const [fulfillmentProvider, setFulfillmentProvider] = useState('bosta');
-
   // Stock alert config
   const [alertEnabled,  setAlertEnabled]  = useState(true);
   const [alertTime1,    setAlertTime1]    = useState('09:00');
@@ -269,7 +267,6 @@ export default function Settings() {
         setAlertDays(d.alert_low_stock_days || '30');
         setChainzEmail(d.chainz_email || '');
         setChainzPassword(d.chainz_password || '');
-        setFulfillmentProvider(d.fulfillment_provider || 'bosta');
       })
       .catch(() => setMsg({ type: 'error', text: 'Failed to load settings.' }))
       .finally(() => setLoading(false));
@@ -492,38 +489,6 @@ export default function Settings() {
         <Btn onClick={save} disabled={saving || loading}>
           {saving ? 'Saving…' : 'Save Settings'}
         </Btn>
-      </Card>
-
-      {/* ── Fulfillment Provider ── */}
-      <Card>
-        <CardTitle>Fulfillment Provider</CardTitle>
-        <p style={{ color: 'var(--muted)', fontSize: '.85rem', marginBottom: '1rem' }}>
-          Choose which warehousing provider this brand uses for orders and reports.
-        </p>
-        <div style={{ display: 'flex', gap: '.5rem' }}>
-          {['bosta', 'chainz'].map(p => (
-            <button
-              key={p}
-              onClick={() => {
-                setFulfillmentProvider(p);
-                authFetch('/settings', {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ fulfillment_provider: p }),
-                });
-              }}
-              style={{
-                padding: '.5rem 1.25rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                border: fulfillmentProvider === p ? '1px solid var(--accent)' : '1px solid var(--border2)',
-                background: fulfillmentProvider === p ? 'var(--accent)' : 'transparent',
-                color: fulfillmentProvider === p ? '#fff' : 'var(--muted)',
-                fontWeight: 600, fontSize: '.85rem', transition: 'all .15s',
-              }}
-            >
-              {p.charAt(0).toUpperCase() + p.slice(1)}
-            </button>
-          ))}
-        </div>
       </Card>
 
       {/* ── Chainz Integration ── */}

@@ -24,7 +24,7 @@ const pageMeta = {
   '/':              { title: 'Dashboard',       subtitle: 'Overview of your financial activity.' },
   '/analytics':     { title: 'Analytics',       subtitle: 'Money in/out totals and spend distribution.' },
   '/cashflow':      { title: 'Cashflow',        subtitle: 'Track your daily money in and money out.' },
-  '/bosta':         { title: 'Bosta Orders',    subtitle: 'Upload a Bosta inventory export to generate a sales report by SKU.' },
+  '/bosta':         { title: 'Orders Export',    subtitle: 'Upload an orders export to generate a sales report by SKU.' },
   '/stock-value':   { title: 'Stock Value',     subtitle: 'Live inventory from Bosta — current stock value by product.' },
   '/products':      { title: 'Products',        subtitle: 'Maintain your SKU name list for reports.' },
   '/categories':    { title: 'Categories',      subtitle: 'Manage money in and money out categories for your brand.' },
@@ -41,7 +41,7 @@ export const PERMISSIONED_PAGES = [
   { path: '/',            label: 'Dashboard'    },
   { path: '/analytics',   label: 'Analytics'    },
   { path: '/cashflow',    label: 'Cashflow'     },
-  { path: '/bosta',       label: 'Bosta Orders' },
+  { path: '/bosta',       label: 'Orders Export' },
   { path: '/stock-value', label: 'Stock Value'  },
   { path: '/products',    label: 'Products'     },
   { path: '/categories',  label: 'Categories'   },
@@ -171,7 +171,7 @@ function Layout() {
           {canSee('/')            && <NavLink to="/"           end  style={({ isActive }) => S.navItem(isActive)} onClick={close}>Home</NavLink>}
           {canSee('/analytics')   && <NavLink to="/analytics"       style={({ isActive }) => S.navItem(isActive)} onClick={close}>Analytics</NavLink>}
           {canSee('/cashflow')    && <NavLink to="/cashflow"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Cashflow</NavLink>}
-          {canSee('/bosta')       && <NavLink to="/bosta"           style={({ isActive }) => S.navItem(isActive)} onClick={close}>Bosta Orders</NavLink>}
+          {canSee('/bosta')       && <NavLink to="/bosta"           style={({ isActive }) => S.navItem(isActive)} onClick={close}>Orders Export</NavLink>}
           {canSee('/stock-value') && <NavLink to="/stock-value"     style={({ isActive }) => S.navItem(isActive)} onClick={close}>Stock Value</NavLink>}
           {canSee('/products')    && <NavLink to="/products"        style={({ isActive }) => S.navItem(isActive)} onClick={close}>Products</NavLink>}
           {canSee('/categories')  && <NavLink to="/categories"      style={({ isActive }) => S.navItem(isActive)} onClick={close}>Categories</NavLink>}
