@@ -20,7 +20,7 @@ COPY app/ ./app/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 COPY --from=frontend-builder /build/frontend/dist ./frontend/dist
-COPY automation/bosta_daily.py ./automation/bosta_daily.py
+COPY automation/ ./automation/
 COPY start_prod.sh ./
 RUN chmod +x start_prod.sh
 ENV PORT=8000
