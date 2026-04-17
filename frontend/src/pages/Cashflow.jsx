@@ -250,7 +250,7 @@ export default function Cashflow() {
             disabled={checkingPayouts}
             style={{ background: 'transparent', border: '1px solid var(--border2)', color: 'var(--muted)', borderRadius: 'var(--radius-sm)', padding: '.3rem .75rem', cursor: 'pointer', fontSize: '.8rem' }}
           >
-            {checkingPayouts ? 'Checking…' : '📧 Check Bosta Payouts'}
+            {checkingPayouts ? 'Checking…' : '📧 Check Payouts'}
           </button>
         </div>
 

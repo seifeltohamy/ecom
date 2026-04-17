@@ -218,9 +218,131 @@ def check_bosta_payout_emails(brand_id: int, db) -> dict:
     return result
 
 
+def check_chainz_payout_emails(brand_id: int, db) -> dict:
+    """Check Gmail for Chainz transaction update emails and create suggestions.
+
+    Parses 'Net Amount: EGP XXXX.XX' from the email body.
+    Subject pattern: 'Orders Transactions Update'
+    FROM: @chainzsolutions.com
+    """
+    result = {"emails_found": 0, "new": 0, "error": None}
+
+    settings = {
+        r.key: r.value
+        for r in db.query(models.AppSettings).filter(
+            models.AppSettings.brand_id == brand_id
+        ).all()
+    }
+    gmail_user = settings.get("bosta_email", "")
+    gmail_pass = settings.get("bosta_email_password", "")
+    if not gmail_user or not gmail_pass:
+        result["error"] = "No Gmail credentials configured in Settings"
+        return result
+
+    try:
+        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        mail.login(gmail_user, gmail_pass)
+        mail.select('"[Gmail]/All Mail"')
+
+        payout_days = int(settings.get('bosta_payout_days') or 2)
+        since = (datetime.utcnow() - timedelta(days=payout_days)).strftime("%d-%b-%Y")
+        _, msgs = mail.search(None, f'SUBJECT "Orders Transactions Update" SINCE {since}')
+        ids = msgs[0].split()
+        result["emails_found"] = len(ids)
+        logger.info("Brand %s: %d Chainz transaction email(s) in last %d days", brand_id, len(ids), payout_days)
+
+        for msg_id in ids:
+            _, data = mail.fetch(msg_id, "(RFC822)")
+            msg = email_lib.message_from_bytes(data[0][1])
+
+            # Get body text
+            body_text = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    ct = part.get_content_type()
+                    if ct == "text/html":
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            body_text = _strip_html(payload.decode("utf-8", errors="ignore"))
+                            break
+                    elif ct == "text/plain" and not body_text:
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            body_text = payload.decode("utf-8", errors="ignore")
+            else:
+                payload = msg.get_payload(decode=True)
+                if payload:
+                    body_text = _strip_html(payload.decode("utf-8", errors="ignore"))
+
+            if not body_text:
+                continue
+
+            # Parse Net Amount: EGP XXXX.XX
+            m = re.search(r"Net\s*Amount[:\s]*(?:EGP)?\s*([\d,]+\.?\d*)", body_text, re.IGNORECASE)
+            if not m:
+                logger.warning("Brand %s: could not parse net amount from Chainz email", brand_id)
+                continue
+            amount = float(m.group(1).replace(",", ""))
+
+            # Use email Date header as ref
+            date_str = msg.get("Date", "")
+            try:
+                tx_date = email.utils.parsedate_to_datetime(date_str).replace(tzinfo=None)
+            except Exception:
+                tx_date = datetime.utcnow()
+
+            # Dedup by date + amount (Chainz doesn't have invoice numbers)
+            ref_number = f"chainz-{tx_date.strftime('%Y%m%d')}-{int(amount)}"
+            existing = db.query(models.SmsSuggestion).filter(
+                models.SmsSuggestion.brand_id == brand_id,
+                models.SmsSuggestion.ref_number == ref_number,
+                models.SmsSuggestion.status.in_(["pending", "accepted"]),
+            ).first()
+            if existing:
+                continue
+
+            # Reset dismissed if re-found
+            dismissed = db.query(models.SmsSuggestion).filter(
+                models.SmsSuggestion.brand_id == brand_id,
+                models.SmsSuggestion.ref_number == ref_number,
+                models.SmsSuggestion.status == "dismissed",
+            ).first()
+
+            if dismissed:
+                dismissed.status = "pending"
+                dismissed.amount = amount
+                dismissed.tx_date = tx_date
+                dismissed.raw_text = body_text[:500]
+                dismissed.created_at = datetime.utcnow()
+            else:
+                db.add(models.SmsSuggestion(
+                    brand_id=brand_id,
+                    raw_text=body_text[:500],
+                    amount=amount,
+                    description="Chainz Payout",
+                    ref_number=ref_number,
+                    tx_date=tx_date,
+                    type="in",
+                    category="Chainz",
+                    status="pending",
+                    created_at=datetime.utcnow(),
+                ))
+            db.commit()
+            result["new"] += 1
+            logger.info("Brand %s: created Chainz payout suggestion — %s EGP", brand_id, amount)
+
+        mail.logout()
+
+    except Exception as exc:
+        logger.error("Brand %s: chainz payout check failed — %s", brand_id, exc, exc_info=True)
+        result["error"] = str(exc)
+
+    return result
+
+
 def run_bosta_payout_check():
-    """APScheduler entry point — runs every 4 hours for all brands."""
-    logger.info("Bosta payout check starting…")
+    """APScheduler entry point — runs every 4 hours for all brands. Checks both Bosta and Chainz."""
+    logger.info("Payout check starting…")
     with get_db() as db:
         brands = db.query(models.Brand).all()
         brand_ids = [b.id for b in brands]
@@ -229,8 +351,14 @@ def run_bosta_payout_check():
         with get_db() as db:
             try:
                 r = check_bosta_payout_emails(brand_id, db)
-                logger.info("Brand %s: found=%d new=%d error=%s", brand_id, r["emails_found"], r["new"], r["error"])
+                logger.info("Brand %s Bosta: found=%d new=%d error=%s", brand_id, r["emails_found"], r["new"], r["error"])
             except Exception as exc:
-                logger.error("Brand %s: error — %s", brand_id, exc, exc_info=True)
+                logger.error("Brand %s Bosta: error — %s", brand_id, exc, exc_info=True)
+        with get_db() as db:
+            try:
+                r = check_chainz_payout_emails(brand_id, db)
+                logger.info("Brand %s Chainz: found=%d new=%d error=%s", brand_id, r["emails_found"], r["new"], r["error"])
+            except Exception as exc:
+                logger.error("Brand %s Chainz: error — %s", brand_id, exc, exc_info=True)
 
-    logger.info("Bosta payout check done")
+    logger.info("Payout check done")

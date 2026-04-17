@@ -283,10 +283,22 @@ def check_bosta_payouts(
     brand_id: int = Depends(get_brand_id),
     _admin: models.User = Depends(require_admin),
 ):
-    """Manually trigger Gmail IMAP check for Bosta cashout emails."""
+    """Manually trigger Gmail IMAP check for Bosta + Chainz payout emails."""
+    from app.bosta_payout import check_chainz_payout_emails
+    bosta_result = {}
+    chainz_result = {}
     with get_db() as db:
-        result = check_bosta_payout_emails(brand_id, db)
-    return {"ok": True, **result}
+        bosta_result = check_bosta_payout_emails(brand_id, db)
+    with get_db() as db:
+        chainz_result = check_chainz_payout_emails(brand_id, db)
+    return {
+        "ok": True,
+        "emails_found": bosta_result.get("emails_found", 0) + chainz_result.get("emails_found", 0),
+        "subject_matched": bosta_result.get("subject_matched", 0),
+        "new": bosta_result.get("new", 0) + chainz_result.get("new", 0),
+        "error": bosta_result.get("error") or chainz_result.get("error"),
+        "payout_days": bosta_result.get("payout_days", 2),
+    }
 
 
 @router.post("/cashflow/sms-suggestions/{suggestion_id}/dismiss")
