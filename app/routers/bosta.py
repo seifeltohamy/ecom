@@ -312,6 +312,33 @@ async def _process_excel(contents: bytes, date_from: str | None, date_to: str | 
         sku_data, order_count = aggregate_excel(wb, date_from=date_from, date_to=date_to)
     with get_db() as db:
         products = get_products_map(db, brand_id)
+
+    # Auto-fetch missing product names from Shopify and save to DB
+    missing_skus = [sku for sku in sku_data if sku not in products]
+    if missing_skus:
+        with get_db() as db:
+            settings = {r.key: r.value for r in db.query(models.AppSettings).filter(
+                models.AppSettings.brand_id == brand_id).all()}
+        store_url = settings.get("shopify_store_url", "")
+        access_token = settings.get("shopify_access_token", "")
+        if store_url and access_token:
+            try:
+                from app.shopify_client import get_product_names_by_sku
+                shopify_names = get_product_names_by_sku(store_url, access_token)
+                with get_db() as db:
+                    for sku in missing_skus:
+                        name = shopify_names.get(sku)
+                        if name:
+                            existing = db.query(models.Product).filter(
+                                models.Product.sku == sku, models.Product.brand_id == brand_id
+                            ).first()
+                            if not existing:
+                                db.add(models.Product(sku=sku, name=name, brand_id=brand_id))
+                                products[sku] = name
+                    db.commit()
+            except Exception:
+                pass  # graceful fallback — "Unknown Product" for unfetchable SKUs
+
     report = build_report(sku_data, products, order_count)
     with get_db() as db:
         saved = models.BostaReport(

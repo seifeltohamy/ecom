@@ -131,6 +131,12 @@ def _next_page_url(link_header: str) -> str | None:
     return None
 
 
+def get_product_names_by_sku(store_url: str, access_token: str) -> dict[str, str]:
+    """Fetch all Shopify products and return {sku: display_name} mapping."""
+    products = get_inventory(store_url, access_token)
+    return {p["product_code"]: p["name"] for p in products if p.get("product_code")}
+
+
 def get_orders_by_name(store_url: str, access_token: str, order_names: list[str]) -> dict:
     """Fetch Shopify orders by name (e.g. '#6656') and return per-order line-item price lookup.
 
