@@ -31,6 +31,7 @@ class User(Base):
     allowed_pages     = Column(Text, nullable=True)   # viewer page whitelist, e.g. '["/","/cashflow"]'
     allowed_brand_ids = Column(Text, nullable=True)   # admin brand whitelist, e.g. '[1,3]'
     read_only         = Column(Boolean, nullable=False, default=False, server_default='false')
+    notification_email = Column(String(255), nullable=True)
 
 
 class Product(Base):
@@ -227,6 +228,38 @@ class TodoTask(Base):
 
     column   = relationship("TodoColumn", back_populates="tasks")
     activity = relationship("TodoActivity")
+
+
+class KpiCategory(Base):
+    __tablename__ = "kpi_categories"
+    __table_args__ = (UniqueConstraint("brand_id", "name", name="uq_kpi_cat_brand_name"),)
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id   = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False, index=True)
+    name       = Column(String(128), nullable=False)
+    schedule   = Column(String(32), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    items      = relationship("KpiItem", back_populates="category", cascade="all, delete-orphan")
+
+
+class KpiItem(Base):
+    __tablename__ = "kpi_items"
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    category_id = Column(Integer, ForeignKey("kpi_categories.id", ondelete="CASCADE"), nullable=False, index=True)
+    title       = Column(String(256), nullable=False)
+    sort_order  = Column(Integer, nullable=False, default=0)
+    category    = relationship("KpiCategory", back_populates="items")
+
+
+class KpiCheck(Base):
+    __tablename__ = "kpi_checks"
+    __table_args__ = (UniqueConstraint("item_id", "user_id", "date", name="uq_kpi_check_item_user_date"),)
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id   = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id    = Column(Integer, ForeignKey("kpi_items.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    checked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    date       = Column(String(16), nullable=False)
 
 
 class WalletEntry(Base):

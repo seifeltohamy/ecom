@@ -16,10 +16,11 @@ from fastapi.responses import FileResponse as _FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms, meta, todo, emails
+from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms, meta, todo, emails, kpi
 from app.stock_alert import run_stock_alert_job
 from app.bosta_payout import run_bosta_payout_check
 from app.meta_balance_alert import run_meta_balance_alert_job
+from app.kpi_reminder import run_kpi_reminder_job
 
 PROJECT_DIR = Path(__file__).parent
 DIST        = PROJECT_DIR / "frontend" / "dist"
@@ -35,7 +36,7 @@ app = FastAPI(title="EcomHQ")
 _SPA_PAGE_PATHS = {
     "/settings", "/stock-value", "/products-sold", "/cashflow", "/products",
     "/categories", "/admin", "/bosta", "/analytics", "/bi", "/todo", "/emails",
-    "/users", "/home",
+    "/users", "/home", "/kpi",
 }
 
 @app.middleware("http")
@@ -72,6 +73,7 @@ def _try_start_scheduler():
     _scheduler.add_job(run_stock_alert_job,        CronTrigger(minute=0))             # hourly
     _scheduler.add_job(run_bosta_payout_check,     CronTrigger(hour="*/4", minute=0)) # every 4 hours
     _scheduler.add_job(run_meta_balance_alert_job, CronTrigger(minute="*/10"))         # every 10 mins
+    _scheduler.add_job(run_kpi_reminder_job,        CronTrigger(minute=0))             # hourly (checks per-category schedule)
     _scheduler.start()
     logging.getLogger(__name__).info("Scheduler started (this worker holds the lock)")
 
@@ -96,6 +98,7 @@ app.include_router(bosta.router)
 app.include_router(bi.router)
 app.include_router(emails.router)
 app.include_router(meta.router)
+app.include_router(kpi.router)
 
 
 # ── SPA / static file serving ─────────────────────────────────────────────────
