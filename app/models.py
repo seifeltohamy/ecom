@@ -42,6 +42,16 @@ class Product(Base):
     price    = Column(Float, nullable=True)  # user-set selling price override
 
 
+class ProductAdset(Base):
+    __tablename__ = "product_adsets"
+    __table_args__ = (UniqueConstraint("brand_id", "sku", "adset_id", name="uq_product_adset"),)
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id   = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False, index=True)
+    sku        = Column(String(64), nullable=False)
+    adset_id   = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class CashflowMonth(Base):
     __tablename__ = "cashflow_months"
     id         = Column(Integer, primary_key=True, index=True)

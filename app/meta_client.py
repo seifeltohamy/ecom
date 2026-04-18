@@ -225,6 +225,43 @@ def get_account_balance(access_token: str, ad_account_id: str) -> dict:
     return {"balance": balance, "currency": currency}
 
 
+def get_adset_insights(access_token: str, ad_account_id: str,
+                       date_from: str, date_to: str) -> list:
+    """Return per-adset rows: {adset_id, adset_name, spend, roas, purchases, cpr}."""
+    import json
+    r = httpx.get(
+        f"https://graph.facebook.com/v21.0/{ad_account_id}/insights",
+        params={
+            "fields":     "adset_id,adset_name,spend,actions,cost_per_action_type,purchase_roas",
+            "time_range": json.dumps({"since": date_from, "until": date_to}),
+            "level":      "adset",
+            "limit":      "500",
+            "access_token": access_token,
+        },
+        timeout=30,
+    )
+    if r.status_code != 200:
+        raise ValueError(_meta_error_message(r))
+    insights = r.json().get("data", [])
+    rows = []
+    for row in insights:
+        actions = {a["action_type"]: float(a["value"]) for a in (row.get("actions") or [])}
+        cpa = {a["action_type"]: float(a["value"]) for a in (row.get("cost_per_action_type") or [])}
+        roas_list = row.get("purchase_roas") or []
+        roas = next((float(r["value"]) for r in roas_list if r.get("action_type") == "omni_purchase"), None)
+        purchases = actions.get("purchase") or actions.get("omni_purchase") or 0
+        cpr = cpa.get("purchase") or cpa.get("omni_purchase") or None
+        rows.append({
+            "adset_id":   row.get("adset_id", ""),
+            "adset_name": row.get("adset_name", ""),
+            "spend":      round(float(row.get("spend", 0) or 0), 2),
+            "roas":       round(roas, 2) if roas else None,
+            "purchases":  int(purchases),
+            "cpr":        round(cpr, 2) if cpr else None,
+        })
+    return rows
+
+
 def get_campaigns(access_token: str, ad_account_id: str,
                   date_from: str, date_to: str) -> list:
     """Return per-campaign rows: {campaign_name, results, cpr, spend, roas}."""

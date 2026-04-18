@@ -13,7 +13,7 @@ from datetime import datetime, date as _date
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-from app.deps import get_db, get_current_user, get_brand_id, require_admin
+from app.deps import get_db, get_current_user, get_brand_id, require_admin, require_writable
 from app import models
 from app import meta_client
 
@@ -218,3 +218,82 @@ def meta_campaigns(
         raise HTTPException(status_code=502, detail=f"Meta API error: {str(e)}")
 
     return {"connected": True, "rows": rows, "date_from": date_from, "date_to": date_to}
+
+
+# ── Adset insights ───────────────────────────────────────────────────────────
+
+@router.get("/meta/adsets")
+def meta_adsets(
+    date_from: str | None = None,
+    date_to:   str | None = None,
+    brand_id: int = Depends(get_brand_id),
+    _user: models.User = Depends(get_current_user),
+):
+    """Return per-adset spend/ROAS/purchases for the given date range."""
+    s = _get_meta_settings(brand_id)
+    token      = s.get("meta_access_token", "")
+    account_id = s.get("meta_ad_account_id", "")
+    if not token or not account_id:
+        return {"connected": False, "rows": []}
+
+    if not date_from or not date_to:
+        date_from, date_to = _current_month_range()
+
+    try:
+        rows = meta_client.get_adset_insights(token, account_id, date_from, date_to)
+    except Exception as e:
+        import re
+        msg = re.sub(r"access_token=[^&\s'\"]+", "access_token=***", str(e))
+        raise HTTPException(status_code=502, detail=msg)
+
+    return {"connected": True, "rows": rows, "date_from": date_from, "date_to": date_to}
+
+
+# ── Product-adset assignments ────────────────────────────────────────────────
+
+from pydantic import BaseModel as _BaseModel
+
+class _AdsetAssign(_BaseModel):
+    adset_ids: list[str]
+
+class _BulkAdsetAssign(_BaseModel):
+    skus: list[str]
+    adset_ids: list[str]
+
+
+@router.get("/meta/product-adsets")
+def get_product_adsets(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
+    """Return {sku: [adset_id, ...]} for all products in this brand."""
+    with get_db() as db:
+        rows = db.query(models.ProductAdset).filter(models.ProductAdset.brand_id == brand_id).all()
+    result: dict[str, list[str]] = {}
+    for r in rows:
+        result.setdefault(r.sku, []).append(r.adset_id)
+    return result
+
+
+@router.put("/meta/product-adsets/{sku}")
+def set_product_adsets(sku: str, body: _AdsetAssign, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
+    """Replace adset assignments for a single product."""
+    with get_db() as db:
+        db.query(models.ProductAdset).filter(
+            models.ProductAdset.brand_id == brand_id, models.ProductAdset.sku == sku
+        ).delete()
+        for adset_id in body.adset_ids:
+            db.add(models.ProductAdset(brand_id=brand_id, sku=sku, adset_id=adset_id))
+        db.commit()
+    return {"ok": True}
+
+
+@router.put("/meta/product-adsets-bulk")
+def bulk_set_product_adsets(body: _BulkAdsetAssign, brand_id: int = Depends(get_brand_id), _user: models.User = Depends(require_writable)):
+    """Assign the same adsets to multiple products at once (Group Adsets)."""
+    with get_db() as db:
+        for sku in body.skus:
+            db.query(models.ProductAdset).filter(
+                models.ProductAdset.brand_id == brand_id, models.ProductAdset.sku == sku
+            ).delete()
+            for adset_id in body.adset_ids:
+                db.add(models.ProductAdset(brand_id=brand_id, sku=sku, adset_id=adset_id))
+        db.commit()
+    return {"ok": True}

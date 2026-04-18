@@ -33,7 +33,8 @@ export default function PlTableRow({
   fillDrag, setFillDrag, fillHoverIdx, setFillHoverIdx,
   formulaActive, handleFormulaMode,
   namingSkus, setNamingSkus, nameInputs, setNameInputs,
-  updatePl, setCostPopup, saveProductName, onPriceEdit,
+  updatePl, setCostPopup, saveProductName, onPriceEdit, onCppClick,
+  selected, onSelectToggle,
 }) {
   const profitColor = row.profit >= 0 ? 'var(--accent)' : 'var(--danger, #ef4444)';
   const isFormulaRow = formulaActive?.sku === row.sku;
@@ -64,6 +65,15 @@ export default function PlTableRow({
       onMouseEnter={() => fillDrag && setFillHoverIdx(idx)}
       style={{ background: rowHl ? 'rgba(249,115,22,.06)' : 'transparent', transition: 'background .05s' }}
     >
+      {/* Select checkbox */}
+      <td style={{ padding: '.4rem', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onSelectToggle?.(row.sku)}
+          style={{ cursor: 'pointer' }}
+        />
+      </td>
       {/* Product name */}
       <td style={tdPlLeft}>
         <div style={{ fontWeight: 600, color: '#fafafa' }}>
@@ -191,9 +201,13 @@ export default function PlTableRow({
         </div>
       </td>
 
-      {/* Ads — auto-computed (price × 5%) + CPP, read-only */}
-      <td style={tdPl}>
-        <span style={{ color: 'var(--muted)', fontSize: '.85rem' }}>{fmtN(row.adsCol)}</span>
+      {/* CPP — clickable, opens AdsetPopup */}
+      <td
+        style={{ ...tdPl, cursor: 'pointer', color: row.cpp ? 'var(--accent)' : 'var(--muted)' }}
+        onClick={() => onCppClick?.(row.sku)}
+        title="Click to manage adsets"
+      >
+        <span style={{ fontSize: '.85rem' }}>{row.cpp ? fmt(row.cpp) : '—'}</span>
       </td>
 
       {/* Qty — formula reference */}

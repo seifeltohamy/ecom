@@ -11,6 +11,7 @@ import StatBar from '../components/StatBar.jsx';
 import AutomateModal from '../components/AutomateModal.jsx';
 import DiscountsPanel from '../components/DiscountsPanel.jsx';
 import CostPopup from '../components/pl/CostPopup.jsx';
+import AdsetPopup from '../components/pl/AdsetPopup.jsx';
 import PlTableRow from '../components/pl/PlTableRow.jsx';
 import ReportHistory from '../components/ReportHistory.jsx';
 
@@ -55,6 +56,12 @@ export default function BostaOrders() {
   // ── Cost items (global per brand/SKU) ──────────────────────────────────────
   const [costItems, setCostItems] = useState({});  // { [sku]: [{name,amount}] }
   const [costPopup, setCostPopup] = useState(null); // { sku, name } | null
+
+  // ── Adset tracking ────────────────────────────────────────────────────────
+  const [productAdsets, setProductAdsets] = useState({});  // { sku: [adset_id] }
+  const [adsetData, setAdsetData] = useState([]);          // [{adset_id, spend, ...}]
+  const [adsetPopupSkus, setAdsetPopupSkus] = useState(null); // [sku] or null
+  const [selectedSkus, setSelectedSkus] = useState(new Set()); // for Group Adsets multi-select
 
   // ── Unknown-product inline naming ─────────────────────────────────────────
   const [namingSkus, setNamingSkus] = useState(new Set());
@@ -125,12 +132,28 @@ export default function BostaOrders() {
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, [fillDrag, fillHoverIdx]);
 
-  // Fetch cost items on mount (brand-wide, all SKUs)
+  // Fetch cost items + product-adset assignments on mount
   useEffect(() => {
     authFetch('/sku-cost-items').then(async res => {
       if (res.ok) setCostItems(await res.json());
     });
+    authFetch('/meta/product-adsets').then(async res => {
+      if (res.ok) setProductAdsets(await res.json());
+    });
   }, []);
+
+  // Fetch adset-level spend when report loads (scoped to report date range)
+  useEffect(() => {
+    if (!report?.date_from || !report?.date_to) { setAdsetData([]); return; }
+    authFetch(`/meta/adsets?date_from=${report.date_from}&date_to=${report.date_to}`)
+      .then(async res => {
+        if (res.ok) {
+          const d = await res.json();
+          setAdsetData(d.rows || []);
+        }
+      })
+      .catch(() => {});
+  }, [report?.date_from, report?.date_to]);
 
   // Load P&L when report changes
   useEffect(() => {
@@ -190,7 +213,7 @@ export default function BostaOrders() {
     });
     const res = await authFetch(`/reports/${id}/pl`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ads_spent: parseFloat(adsSpentRef.current) || null, items }),
+      body: JSON.stringify({ ads_spent: null, items }),
     });
     setSaveState(res.ok ? 'saved' : 'idle');
     if (res.ok) setTimeout(() => setSaveState('idle'), 2500);
@@ -201,7 +224,7 @@ export default function BostaOrders() {
     if (skipAutosaveRef.current) { skipAutosaveRef.current = false; return; }
     const timer = setTimeout(() => doSave(reportId), 1500);
     return () => clearTimeout(timer);
-  }, [pl, adsSpent, reportId, doSave]);
+  }, [pl, reportId, doSave]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -295,7 +318,15 @@ export default function BostaOrders() {
 
   // ── Derived data ──────────────────────────────────────────────────────────
 
-  const ads = parseFloat(adsSpent) || 0;
+  // Build adset spend lookup: {adset_id: spend}
+  const adsetSpendMap = {};
+  adsetData.forEach(a => { adsetSpendMap[a.adset_id] = a.spend; });
+
+  // Count how many products share each adset (for equal split)
+  const adsetProductCount = {};
+  Object.entries(productAdsets).forEach(([, ids]) => {
+    ids.forEach(id => { adsetProductCount[id] = (adsetProductCount[id] || 0) + 1; });
+  });
 
   const plRows = report ? report.rows.map(row => {
     const p       = pl[row.sku] || {};
@@ -306,21 +337,29 @@ export default function BostaOrders() {
 
     const items  = costItems[row.sku];
     const cost   = items?.length ? items.reduce((a, i) => a + i.amount, 0) : (evalFormula(p.cost, ctx) ?? 0);
-    const cppVal = ads && report.order_count ? ads / report.order_count : 0;
-    const adsCol = price * 0.05 + cppVal;
 
-    const expense = (cost + adsCol) * qty;
+    // CPP from assigned adsets (equal split per product)
+    const assignedAdsets = productAdsets[row.sku] || [];
+    let productAdsSpent = 0;
+    assignedAdsets.forEach(adId => {
+      const spend = adsetSpendMap[adId] || 0;
+      const count = adsetProductCount[adId] || 1;
+      productAdsSpent += spend / count;
+    });
+    const cpp = qty > 0 ? productAdsSpent / qty : 0;
+
+    const expense = (cost + cpp) * qty;
     const profit  = revenue - expense;
     const pct     = revenue ? profit / revenue * 100 : 0;
-    return { sku: row.sku, name: row.name, price, qty, revenue, adsCol, expense, profit, pct };
+    return { sku: row.sku, name: row.name, price, qty, revenue, cpp: Math.round(cpp * 100) / 100, adsSpent: Math.round(productAdsSpent * 100) / 100, expense, profit, pct };
   }) : [];
 
   plRowsRef.current = plRows;
 
   const plTotals   = plRows.reduce((a, r) => ({ revenue: a.revenue + r.revenue, expense: a.expense + r.expense, profit: a.profit + r.profit }), { revenue: 0, expense: 0, profit: 0 });
   const plTotalPct = plTotals.revenue ? plTotals.profit / plTotals.revenue * 100 : 0;
-  const cpp        = ads && report?.order_count ? ads / report.order_count : null;
-  const roas       = ads && plTotals.revenue    ? plTotals.revenue / ads   : null;
+  const totalAdsSpent = plRows.reduce((s, r) => s + (r.adsSpent || 0), 0);
+  const totalRoas     = totalAdsSpent > 0 ? plTotals.revenue / totalAdsSpent : null;
 
   // ── Offer-adjusted totals ──────────────────────────────────────────────────
   const offerTotals = offers.length > 0 ? plRows.reduce((acc, row) => {
@@ -350,6 +389,27 @@ export default function BostaOrders() {
           initialItems={costItems[costPopup.sku] ?? []}
           onSave={handleCostPopupSave}
           onClose={() => setCostPopup(null)}
+        />
+      )}
+
+      {adsetPopupSkus && (
+        <AdsetPopup
+          skus={adsetPopupSkus}
+          skuNames={Object.fromEntries((report?.rows || []).map(r => [r.sku, r.name]))}
+          dateFrom={report?.date_from || ''}
+          dateTo={report?.date_to || ''}
+          initialAdsets={productAdsets}
+          qtyBySku={Object.fromEntries((report?.rows || []).map(r => [r.sku, r.total_quantity]))}
+          onSave={(skus, adsetIds) => {
+            setProductAdsets(prev => {
+              const next = { ...prev };
+              skus.forEach(s => { next[s] = adsetIds; });
+              return next;
+            });
+            setAdsetPopupSkus(null);
+            setSelectedSkus(new Set());
+          }}
+          onClose={() => setAdsetPopupSkus(null)}
         />
       )}
 
@@ -445,26 +505,11 @@ export default function BostaOrders() {
                   Double-click Cost for itemised breakdown.
                 </p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-                  <label style={{ fontSize: '.75rem', textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', whiteSpace: 'nowrap' }}>Ads Spent (EGP)</label>
-                  <input
-                    type="text" placeholder="0" value={adsSpent}
-                    onChange={e => setAdsSpent(e.target.value)}
-                    style={{ width: 110, background: 'var(--surface2, #1c1917)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 6, padding: '.35rem .6rem', fontSize: '.9rem', fontFamily: 'inherit', outline: 'none' }}
-                  />
-                </div>
-                {ads > 0 && (
-                  <div style={{ display: 'flex', gap: '.75rem' }}>
-                    {[{ label: 'Cost / Purchase', value: cpp  != null ? `EGP ${fmt(cpp)}`     : '—' },
-                      { label: 'ROAS',             value: roas != null ? `${roas.toFixed(2)}×` : '—' }]
-                      .map(({ label, value }) => (
-                        <div key={label} style={{ background: 'var(--bg, #0c0a09)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '.5rem .9rem', minWidth: 110 }}>
-                          <div style={{ fontSize: '.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)' }}>{label}</div>
-                          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--accent)', marginTop: '.2rem' }}>{value}</div>
-                        </div>
-                      ))}
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
+                {selectedSkus.size >= 2 && (
+                  <Btn onClick={() => setAdsetPopupSkus(Array.from(selectedSkus))}>
+                    Group Adsets ({selectedSkus.size})
+                  </Btn>
                 )}
                 <Btn onClick={() => doSave(reportId)} disabled={saveState === 'saving'} variant={saveState === 'saved' ? 'outline' : 'primary'}>
                   {saveState === 'saving' ? <><Spinner size={13} /> Saving…</> : saveState === 'saved' ? '✓ Saved' : 'Save P&L'}
@@ -481,10 +526,22 @@ export default function BostaOrders() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                    <th style={{ ...thPl, width: 28, padding: '.4rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={plRows.length > 0 && selectedSkus.size === plRows.length}
+                        onChange={e => {
+                          if (e.target.checked) setSelectedSkus(new Set(plRows.map(r => r.sku)));
+                          else setSelectedSkus(new Set());
+                        }}
+                        style={{ cursor: 'pointer' }}
+                        title="Select all for Group Adsets"
+                      />
+                    </th>
                     <th style={thPlLeft}>Product</th>
                     <th style={{ ...thPl, color: 'var(--muted)' }}>Price</th>
                     <th style={{ ...thPl, color: 'var(--accent)' }}>Cost</th>
-                    <th style={{ ...thPl, color: 'var(--accent)' }} title="(price × 5%) + Cost Per Purchase">Ads</th>
+                    <th style={{ ...thPl, color: 'var(--accent)' }} title="Cost Per Purchase from assigned adsets">CPP</th>
                     <th style={thPl}>Qty Sold</th>
                     <th style={thPl}>Revenue</th>
                     <th style={thPl}>Expense</th>
@@ -511,7 +568,6 @@ export default function BostaOrders() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ sku, name, price }),
                         });
-                        // Update the report row locally
                         setReport(prev => {
                           if (!prev?.rows) return prev;
                           const rows = prev.rows.map(r => {
@@ -524,17 +580,34 @@ export default function BostaOrders() {
                           return { ...prev, rows, grand_revenue };
                         });
                       }}
+                      onCppClick={(sku) => setAdsetPopupSkus([sku])}
+                      selected={selectedSkus.has(row.sku)}
+                      onSelectToggle={(sku) => setSelectedSkus(prev => {
+                        const next = new Set(prev);
+                        if (next.has(sku)) next.delete(sku); else next.add(sku);
+                        return next;
+                      })}
                     />
                   ))}
                 </tbody>
                 <tfoot>
                   <tr style={{ background: 'rgba(249,115,22,.07)', borderTop: '2px solid var(--accent)' }}>
-                    <td style={{ ...tdPlLeft, fontWeight: 700, color: '#fafafa' }} colSpan={5}>Total</td>
+                    <td style={{ ...tdPlLeft, fontWeight: 700, color: '#fafafa' }} colSpan={4}>Total</td>
+                    <td style={{ ...tdPl, fontWeight: 700, color: 'var(--accent)', fontSize: '.75rem' }}>{totalAdsSpent > 0 ? `EGP ${fmt(totalAdsSpent)}` : ''}</td>
+                    <td style={tdPl} />
                     <td style={{ ...tdPl, fontWeight: 700, color: 'var(--accent)' }}>{fmt(plTotals.revenue)}</td>
                     <td style={{ ...tdPl, fontWeight: 700 }}>{fmt(plTotals.expense)}</td>
                     <td style={{ ...tdPl, fontWeight: 700, color: plTotals.profit >= 0 ? 'var(--accent)' : 'var(--danger, #ef4444)' }}>{fmt(plTotals.profit)}</td>
                     <td style={{ ...tdPl, fontWeight: 700, color: plTotals.profit >= 0 ? 'var(--accent)' : 'var(--danger, #ef4444)' }}>{plTotalPct.toFixed(2)}%</td>
                   </tr>
+                  {totalRoas != null && (
+                    <tr style={{ background: 'rgba(249,115,22,.04)' }}>
+                      <td style={{ ...tdPlLeft, fontSize: '.78rem', color: 'var(--muted)' }} colSpan={4}>ROAS</td>
+                      <td style={{ ...tdPl, fontWeight: 700, color: totalRoas >= 2 ? 'var(--success)' : totalRoas >= 1 ? 'var(--accent)' : 'var(--danger)' }} colSpan={6}>
+                        {totalRoas.toFixed(2)}×
+                      </td>
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>
