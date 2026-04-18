@@ -525,9 +525,36 @@ def get_report(report_id: int, brand_id: int = Depends(get_brand_id), _user: mod
         if not r:
             raise HTTPException(status_code=404, detail="Report not found.")
         rows = json.loads(r.rows_json)
-        # Overlay saved product names so inline-named "Unknown Product" rows
-        # reflect the name the user saved even after a refresh / re-upload.
+        # Overlay saved product names + auto-fetch from Shopify for unknowns
         products_map = get_products_map(db, brand_id)
+
+        # Find SKUs still named "Unknown Product" and try Shopify
+        unknown_skus = [row.get("sku") for row in rows
+                        if row.get("name") == "Unknown Product" and products_map.get(row.get("sku"), "Unknown Product") == "Unknown Product"]
+        if unknown_skus:
+            settings = {s.key: s.value for s in db.query(models.AppSettings).filter(
+                models.AppSettings.brand_id == brand_id).all()}
+            store_url = settings.get("shopify_store_url", "")
+            access_token = settings.get("shopify_access_token", "")
+            if store_url and access_token:
+                try:
+                    from app.shopify_client import get_product_names_by_sku
+                    shopify_names = get_product_names_by_sku(store_url, access_token)
+                    for sku in unknown_skus:
+                        name = shopify_names.get(sku)
+                        if name:
+                            existing = db.query(models.Product).filter(
+                                models.Product.sku == sku, models.Product.brand_id == brand_id
+                            ).first()
+                            if existing and existing.name == "Unknown Product":
+                                existing.name = name
+                            elif not existing:
+                                db.add(models.Product(sku=sku, name=name, brand_id=brand_id))
+                            products_map[sku] = name
+                    db.commit()
+                except Exception:
+                    pass
+
         for row in rows:
             saved = products_map.get(row.get("sku"))
             if saved:
