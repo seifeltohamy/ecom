@@ -28,6 +28,10 @@ export default function AdsetPopup({ skus, skuNames, dateFrom: defaultFrom, date
   // Which adset IDs are checked
   const [checked, setChecked] = useState(new Set());
 
+  // Sort state
+  const [sortKey, setSortKey] = useState(null); // 'name' | 'roas' | 'spend'
+  const [sortDir, setSortDir] = useState('asc');
+
   // Load initial checked state from first SKU's assignments
   useEffect(() => {
     const first = skus[0];
@@ -156,18 +160,33 @@ export default function AdsetPopup({ skus, skuNames, dateFrom: defaultFrom, date
             </div>
           )}
 
-          {!loading && adsets.length > 0 && (
+          {!loading && adsets.length > 0 && (() => {
+            const toggleSort = (key) => {
+              if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+              else { setSortKey(key); setSortDir(key === 'name' ? 'asc' : 'desc'); }
+            };
+            const arrow = (key) => sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+            const thSort = { cursor: 'pointer', userSelect: 'none' };
+            const sorted = [...adsets].sort((a, b) => {
+              if (!sortKey) return 0;
+              let cmp = 0;
+              if (sortKey === 'name') cmp = (a.adset_name || '').localeCompare(b.adset_name || '');
+              else if (sortKey === 'roas') cmp = (a.roas || 0) - (b.roas || 0);
+              else if (sortKey === 'spend') cmp = a.spend - b.spend;
+              return sortDir === 'asc' ? cmp : -cmp;
+            });
+            return (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border2)' }}>
                   <th style={{ width: 32, padding: '.4rem' }} />
-                  <th style={{ textAlign: 'left', padding: '.4rem .6rem', color: 'var(--muted)', fontWeight: 600, fontSize: '.72rem', textTransform: 'uppercase' }}>Adset Name</th>
-                  <th style={{ textAlign: 'right', padding: '.4rem .6rem', color: 'var(--muted)', fontWeight: 600, fontSize: '.72rem', textTransform: 'uppercase' }}>ROAS</th>
-                  <th style={{ textAlign: 'right', padding: '.4rem .6rem', color: 'var(--muted)', fontWeight: 600, fontSize: '.72rem', textTransform: 'uppercase' }}>Spend</th>
+                  <th onClick={() => toggleSort('name')} style={{ ...thSort, textAlign: 'left', padding: '.4rem .6rem', color: 'var(--muted)', fontWeight: 600, fontSize: '.72rem', textTransform: 'uppercase' }}>Adset Name{arrow('name')}</th>
+                  <th onClick={() => toggleSort('roas')} style={{ ...thSort, textAlign: 'right', padding: '.4rem .6rem', color: 'var(--muted)', fontWeight: 600, fontSize: '.72rem', textTransform: 'uppercase' }}>ROAS{arrow('roas')}</th>
+                  <th onClick={() => toggleSort('spend')} style={{ ...thSort, textAlign: 'right', padding: '.4rem .6rem', color: 'var(--muted)', fontWeight: 600, fontSize: '.72rem', textTransform: 'uppercase' }}>Spend{arrow('spend')}</th>
                 </tr>
               </thead>
               <tbody>
-                {adsets.map(a => {
+                {sorted.map(a => {
                   const isChecked = checked.has(a.adset_id);
                   return (
                     <tr
@@ -202,7 +221,8 @@ export default function AdsetPopup({ skus, skuNames, dateFrom: defaultFrom, date
                 })}
               </tbody>
             </table>
-          )}
+            );
+          })()}
         </div>
 
         {/* Summary metrics */}
