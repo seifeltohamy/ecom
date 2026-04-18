@@ -123,7 +123,7 @@ export default function PlTableRow({
             onBlur={() => {
               setEditingPrice(false);
               const val = parseFloat(priceInput);
-              if (!isNaN(val) && val !== row.price && onPriceEdit) onPriceEdit(row.sku, row.name, val);
+              if (!isNaN(val) && onPriceEdit) onPriceEdit(row.sku, row.name, val);
             }}
             onKeyDown={e => {
               if (e.key === 'Enter') e.target.blur();
