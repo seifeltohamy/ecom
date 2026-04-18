@@ -106,7 +106,8 @@ export default function PlTableRow({
         {editingPrice ? (
           <input
             autoFocus
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={priceInput}
             onChange={e => setPriceInput(e.target.value)}
             onBlur={() => {
