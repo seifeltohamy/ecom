@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse as _FileResponse
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.routers import auth, cashflow, dashboard, products, settings, bosta, bi, sms, meta, todo, emails, kpi
+from app.routers import auth, cashflow, dashboard, products, settings, bosta, reports, automation, cost_items, bi, sms, meta, todo, emails, kpi
 from app.stock_alert import run_stock_alert_job
 from app.bosta_payout import run_bosta_payout_check
 from app.meta_balance_alert import run_meta_balance_alert_job
@@ -95,6 +95,9 @@ app.include_router(dashboard.router)
 app.include_router(products.router)
 app.include_router(settings.router)
 app.include_router(bosta.router)
+app.include_router(reports.router)
+app.include_router(automation.router)
+app.include_router(cost_items.router)
 app.include_router(bi.router)
 app.include_router(emails.router)
 app.include_router(meta.router)
