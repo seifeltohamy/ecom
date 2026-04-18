@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class ProductIn(BaseModel):
     sku: str
     name: str
+    price: float | None = None
 
 
 class CashflowMonthIn(BaseModel):

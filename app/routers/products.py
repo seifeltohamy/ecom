@@ -14,7 +14,7 @@ router = APIRouter()
 def get_products(brand_id: int = Depends(get_brand_id), _user: models.User = Depends(get_current_user)):
     with get_db() as db:
         products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
-        return {p.sku: p.name for p in products}
+        return {p.sku: {"name": p.name, "price": p.price} for p in products}
 
 
 @router.post("/products")
@@ -29,10 +29,12 @@ def add_product(product: schemas.ProductIn, brand_id: int = Depends(get_brand_id
         ).first()
         if existing:
             existing.name = name
+            if product.price is not None:
+                existing.price = product.price
         else:
-            db.add(models.Product(sku=sku, name=name, brand_id=brand_id))
+            db.add(models.Product(sku=sku, name=name, brand_id=brand_id, price=product.price))
         db.commit()
-    return {"ok": True, "sku": sku, "name": name}
+    return {"ok": True, "sku": sku, "name": name, "price": product.price}
 
 
 @router.delete("/products/{sku}")

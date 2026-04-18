@@ -56,8 +56,15 @@ def _delete_export(fid: str) -> None:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_products_map(db: Session, brand_id: int) -> dict:
+    """Return {sku: name} for backward compat. Use get_products_full for prices."""
     products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
     return {p.sku: p.name for p in products}
+
+
+def get_products_full(db: Session, brand_id: int) -> dict:
+    """Return {sku: {name, price}} for price-aware report building."""
+    products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
+    return {p.sku: {"name": p.name, "price": p.price} for p in products}
 
 
 def parse_description_text(text: str) -> list[tuple]:
@@ -225,10 +232,12 @@ def aggregate_chainz_excel(workbook, date_from: str = None, date_to: str = None,
     return sku_data, order_count
 
 
-def build_report(sku_data: dict, products: dict, order_count: int = 0) -> dict:
+def build_report(sku_data: dict, products: dict, order_count: int = 0, product_prices: dict = None) -> dict:
+    """Build report from sku_data. products = {sku: name}, product_prices = {sku: float|None}."""
     rows = []
     grand_qty = 0
     grand_rev = 0.0
+    product_prices = product_prices or {}
 
     product_order = {sku: i for i, sku in enumerate(products.keys())}
 
@@ -237,19 +246,28 @@ def build_report(sku_data: dict, products: dict, order_count: int = 0) -> dict:
 
     for sku in sorted(sku_data.keys(), key=sort_key):
         name = products.get(sku, "Unknown Product")
-        price_breakdown = []
-        sku_qty = 0
-        sku_rev = 0.0
+        saved_price = product_prices.get(sku)
 
-        for price in sorted(sku_data[sku].keys(), reverse=True):
-            d = sku_data[sku][price]
-            price_breakdown.append({
-                "price": price,
-                "quantity": d["quantity"],
-                "total": round(d["total"], 2),
-            })
-            sku_qty += d["quantity"]
-            sku_rev += d["total"]
+        if saved_price is not None:
+            # Override: collapse all price tiers into one using the saved price
+            total_qty = sum(d["quantity"] for d in sku_data[sku].values())
+            total_rev = round(saved_price * total_qty, 2)
+            price_breakdown = [{"price": saved_price, "quantity": total_qty, "total": total_rev}]
+            sku_qty = total_qty
+            sku_rev = total_rev
+        else:
+            price_breakdown = []
+            sku_qty = 0
+            sku_rev = 0.0
+            for price in sorted(sku_data[sku].keys(), reverse=True):
+                d = sku_data[sku][price]
+                price_breakdown.append({
+                    "price": price,
+                    "quantity": d["quantity"],
+                    "total": round(d["total"], 2),
+                })
+                sku_qty += d["quantity"]
+                sku_rev += d["total"]
 
         rows.append({
             "sku": sku,
@@ -339,7 +357,12 @@ async def _process_excel(contents: bytes, date_from: str | None, date_to: str | 
             except Exception:
                 pass  # graceful fallback — "Unknown Product" for unfetchable SKUs
 
-    report = build_report(sku_data, products, order_count)
+    # Get saved product prices for price overrides
+    with get_db() as db:
+        product_prices = {p.sku: p.price for p in db.query(models.Product).filter(
+            models.Product.brand_id == brand_id, models.Product.price.isnot(None)
+        ).all()}
+    report = build_report(sku_data, products, order_count, product_prices=product_prices)
     with get_db() as db:
         saved = models.BostaReport(
             uploaded_at    = _dt.utcnow(),

@@ -505,6 +505,25 @@ export default function BostaOrders() {
                       nameInputs={nameInputs} setNameInputs={setNameInputs}
                       updatePl={updatePl} setCostPopup={setCostPopup}
                       saveProductName={saveProductName}
+                      onPriceEdit={async (sku, name, price) => {
+                        await authFetch('/products', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ sku, name, price }),
+                        });
+                        // Update the report row locally
+                        setReport(prev => {
+                          if (!prev?.rows) return prev;
+                          const rows = prev.rows.map(r => {
+                            if (r.sku !== sku) return r;
+                            const qty = r.total_quantity;
+                            const rev = price * qty;
+                            return { ...r, prices: [{ price, quantity: qty, total: rev }], total_revenue: rev };
+                          });
+                          const grand_revenue = rows.reduce((s, r) => s + r.total_revenue, 0);
+                          return { ...prev, rows, grand_revenue };
+                        });
+                      }}
                     />
                   ))}
                 </tbody>

@@ -39,6 +39,7 @@ class Product(Base):
     sku      = Column(String(64), primary_key=True)
     name     = Column(String(255), nullable=False)
     brand_id = Column(Integer, ForeignKey("brands.id"), nullable=False)
+    price    = Column(Float, nullable=True)  # user-set selling price override
 
 
 class CashflowMonth(Base):

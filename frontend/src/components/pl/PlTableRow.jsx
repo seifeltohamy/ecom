@@ -33,10 +33,12 @@ export default function PlTableRow({
   fillDrag, setFillDrag, fillHoverIdx, setFillHoverIdx,
   formulaActive, handleFormulaMode,
   namingSkus, setNamingSkus, nameInputs, setNameInputs,
-  updatePl, setCostPopup, saveProductName,
+  updatePl, setCostPopup, saveProductName, onPriceEdit,
 }) {
   const profitColor = row.profit >= 0 ? 'var(--accent)' : 'var(--danger, #ef4444)';
   const isFormulaRow = formulaActive?.sku === row.sku;
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceInput, setPriceInput] = useState('');
   const hasCostItems = costItems[row.sku]?.length > 0;
   const isUnknown    = row.name === 'Unknown Product';
   const isNaming     = namingSkus.has(row.sku);
@@ -96,11 +98,32 @@ export default function PlTableRow({
         <div style={{ fontSize: '.73rem', color: 'var(--muted)', fontFamily: 'monospace', marginTop: 2 }}>{row.sku}</div>
       </td>
 
-      {/* Price — formula reference */}
-      <RefTd varName="price" formulaActive={isFormulaRow ? formulaActive : null} rowSku={row.sku}
-        style={{ ...tdPl, color: 'var(--muted)' }}>
-        {fmtN(row.price)}
-      </RefTd>
+      {/* Price — editable */}
+      <td
+        style={{ ...tdPl, color: 'var(--accent)', cursor: 'pointer', minWidth: 70 }}
+        onClick={() => { if (!editingPrice) { setEditingPrice(true); setPriceInput(String(row.price || '')); } }}
+      >
+        {editingPrice ? (
+          <input
+            autoFocus
+            type="number"
+            value={priceInput}
+            onChange={e => setPriceInput(e.target.value)}
+            onBlur={() => {
+              setEditingPrice(false);
+              const val = parseFloat(priceInput);
+              if (!isNaN(val) && val !== row.price && onPriceEdit) onPriceEdit(row.sku, row.name, val);
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') e.target.blur();
+              if (e.key === 'Escape') setEditingPrice(false);
+            }}
+            style={{ width: 70, padding: '.2rem .4rem', background: 'var(--surface2)', border: '1px solid var(--accent)', borderRadius: 4, color: 'var(--text)', fontSize: '.85rem', textAlign: 'right', outline: 'none' }}
+          />
+        ) : (
+          <span title="Click to edit price">{fmtN(row.price)}</span>
+        )}
+      </td>
 
       {/* Cost — always opens popup on click; fill handle on hover */}
       <td style={tdPl}

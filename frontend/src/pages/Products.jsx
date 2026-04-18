@@ -112,22 +112,30 @@ export default function Products() {
                 <tr>
                   <th style={thStyle}>SKU</th>
                   <th style={thStyle}>Name</th>
+                  <th style={{ ...thStyle, textAlign: 'right' }}>Price</th>
                   <th style={thStyle} />
                 </tr>
               </thead>
               <tbody>
-                {entries.map(([s, n]) => (
-                  <tr key={s} style={{ transition: 'background .1s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <td style={{ ...tdStyle, ...S.mono }}><Badge>{s}</Badge></td>
-                    <td style={tdStyle}>{n}</td>
-                    <td style={{ ...tdStyle, textAlign: 'right' }}>
-                      <Btn variant="danger" onClick={() => del(s)}>Remove</Btn>
-                    </td>
-                  </tr>
-                ))}
+                {entries.map(([s, info]) => {
+                  const pName = typeof info === 'string' ? info : info?.name || '';
+                  const pPrice = typeof info === 'object' ? info?.price : null;
+                  return (
+                    <tr key={s} style={{ transition: 'background .1s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ ...tdStyle, ...S.mono }}><Badge>{s}</Badge></td>
+                      <td style={tdStyle}>{pName}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right', color: 'var(--muted)', fontSize: '.85rem' }}>
+                        {pPrice != null ? `EGP ${pPrice}` : '—'}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>
+                        <Btn variant="danger" onClick={() => del(s)}>Remove</Btn>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
