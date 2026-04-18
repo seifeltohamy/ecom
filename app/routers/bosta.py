@@ -331,8 +331,8 @@ async def _process_excel(contents: bytes, date_from: str | None, date_to: str | 
     with get_db() as db:
         products = get_products_map(db, brand_id)
 
-    # Auto-fetch missing product names from Shopify and save to DB
-    missing_skus = [sku for sku in sku_data if sku not in products]
+    # Auto-fetch missing or unnamed product names from Shopify and save to DB
+    missing_skus = [sku for sku in sku_data if sku not in products or products.get(sku) == "Unknown Product"]
     if missing_skus:
         with get_db() as db:
             settings = {r.key: r.value for r in db.query(models.AppSettings).filter(
@@ -350,9 +350,12 @@ async def _process_excel(contents: bytes, date_from: str | None, date_to: str | 
                             existing = db.query(models.Product).filter(
                                 models.Product.sku == sku, models.Product.brand_id == brand_id
                             ).first()
-                            if not existing:
+                            if existing:
+                                if existing.name == "Unknown Product":
+                                    existing.name = name
+                            else:
                                 db.add(models.Product(sku=sku, name=name, brand_id=brand_id))
-                                products[sku] = name
+                            products[sku] = name
                     db.commit()
             except Exception:
                 pass  # graceful fallback — "Unknown Product" for unfetchable SKUs
